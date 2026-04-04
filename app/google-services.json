@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "123901752867",
+    "project_id": "homefix-298fb",
+    "storage_bucket": "homefix-298fb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123901752867:android:c4ff1182eb7fbcca456396",
+        "android_client_info": {
+          "package_name": "com.tunegocio.homefix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwaMDT52c9jF5pjb2mzKioX4I_E-Yix9M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:123901752867:android:09e2d5a19db3526c456396",
+        "android_client_info": {
+          "package_name": "com.tuusuario.homefix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwaMDT52c9jF5pjb2mzKioX4I_E-Yix9M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
