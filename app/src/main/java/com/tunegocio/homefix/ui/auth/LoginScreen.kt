@@ -9,8 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -19,6 +19,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.components.HomefixButton
 import com.tunegocio.homefix.ui.components.HomefixTextField
+import com.tunegocio.homefix.ui.components.isValidEmail
 import com.tunegocio.homefix.ui.theme.*
 
 @Composable
@@ -30,15 +31,42 @@ fun LoginScreen(navController: NavController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
+
+    // Errores por campo
+    var emailError by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf("") }
+    var generalError by remember { mutableStateOf("") }
 
     fun login() {
-        if (email.isBlank() || password.isBlank()) {
-            errorMessage = "Completa todos los campos"
-            return
+        // Limpiar errores anteriores
+        emailError = ""
+        passwordError = ""
+        generalError = ""
+
+        var hasError = false
+
+        // Validar email
+        if (email.isBlank()) {
+            emailError = "El correo es obligatorio"
+            hasError = true
+        } else if (!isValidEmail(email)) {
+            emailError = "Ingresa un correo válido (ej: correo@gmail.com)"
+            hasError = true
         }
+
+        // Validar contraseña
+        if (password.isBlank()) {
+            passwordError = "La contraseña es obligatoria"
+            hasError = true
+        } else if (password.length < 6) {
+            passwordError = "Mínimo 6 caracteres"
+            hasError = true
+        }
+
+        if (hasError) return
+
         isLoading = true
-        errorMessage = ""
+
         auth.signInWithEmailAndPassword(email.trim(), password)
             .addOnSuccessListener { result ->
                 val uid = result.user?.uid ?: return@addOnSuccessListener
@@ -59,11 +87,17 @@ fun LoginScreen(navController: NavController) {
             }
             .addOnFailureListener { e ->
                 isLoading = false
-                errorMessage = when {
-                    e.message?.contains("password") == true -> "Contraseña incorrecta"
-                    e.message?.contains("no user") == true -> "Usuario no encontrado"
-                    e.message?.contains("email") == true -> "Correo inválido"
-                    else -> "Error al iniciar sesión"
+                when {
+                    e.message?.contains("password") == true ->
+                        passwordError = "Contraseña incorrecta"
+                    e.message?.contains("no user") == true ->
+                        emailError = "No existe una cuenta con ese correo"
+                    e.message?.contains("email") == true ->
+                        emailError = "Correo inválido"
+                    e.message?.contains("blocked") == true ->
+                        generalError = "Demasiados intentos, intenta más tarde"
+                    else ->
+                        generalError = "Error al iniciar sesión, intenta de nuevo"
                 }
             }
     }
@@ -103,27 +137,50 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(40.dp))
 
+            // Email
             HomefixTextField(
                 value = email,
-                onValueChange = { email = it },
-                label = "Correo electrónico"
+                onValueChange = {
+                    email = it
+                    if (it.isNotBlank()) emailError = ""
+                },
+                label = "Correo electrónico",
+                isError = emailError.isNotEmpty(),
+                errorMessage = emailError,
+                keyboardType = KeyboardType.Email
             )
             Spacer(modifier = Modifier.height(12.dp))
+
+            // Contraseña
             HomefixTextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = {
+                    password = it
+                    if (it.isNotBlank()) passwordError = ""
+                },
                 label = "Contraseña",
-                isPassword = true
+                isPassword = true,
+                isError = passwordError.isNotEmpty(),
+                errorMessage = passwordError
             )
 
-            if (errorMessage.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = errorMessage,
-                    color = Error,
-                    style = MaterialTheme.typography.bodySmall,
-                    textAlign = TextAlign.Center
-                )
+            // Error general (bloqueado, sin internet, etc)
+            if (generalError.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                    color = Error.copy(alpha = 0.08f)
+                ) {
+                    Text(
+                        text = generalError,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        color = Error,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -152,6 +209,8 @@ fun LoginScreen(navController: NavController) {
                     }
                 )
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

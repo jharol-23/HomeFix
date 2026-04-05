@@ -50,9 +50,13 @@ camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
+compose-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+
 
