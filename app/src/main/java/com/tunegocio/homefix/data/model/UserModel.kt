@@ -7,12 +7,14 @@ data class UserModel(
     val role: String = "",        // "client" o "technician"
     val phone: String = "",
     val photoUrl: String = "",
+    val selfieUrl: String = "",
+    val district: String = "",
     val rating: Float = 0f,
     val createdAt: Long = 0L,
 
     // Solo técnicos
     val dni: String = "",
-    val selfieUrl: String = "",
+
     val specialties: List<String> = emptyList(),
     val yearsExp: Int = 0,
     val whatsapp: String = "",

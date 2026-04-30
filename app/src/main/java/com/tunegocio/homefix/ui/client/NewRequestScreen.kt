@@ -39,9 +39,13 @@ import com.tunegocio.homefix.ui.theme.*
 import java.io.File
 import java.util.UUID
 
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.tunegocio.homefix.data.CloudinaryUploader
 
 import androidx.compose.material.icons.filled.PhotoCamera
 
+import com.tunegocio.homefix.data.ALL_SPECIALTIES
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -52,6 +56,9 @@ fun NewRequestScreen(navController: NavController) {
     val db = FirebaseFirestore.getInstance()
     val storage = FirebaseStorage.getInstance()
     val uid = auth.currentUser?.uid ?: ""
+
+    val scope = rememberCoroutineScope()
+
 
     var serviceType by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -64,10 +71,17 @@ fun NewRequestScreen(navController: NavController) {
     var errorMessage by remember { mutableStateOf("") }
     var locationLoaded by remember { mutableStateOf(false) }
 
-    val serviceTypes = listOf(
+    var reference by remember { mutableStateOf("") }
+    var clientDistrict by remember { mutableStateOf("") }
+
+    /*val serviceTypes = listOf(
         "Electricidad", "Gasfitería", "Carpintería",
         "Pintura", "Albañilería", "Otros"
-    )
+    )*/
+
+    // Dentro del composable usa directamente:
+    val serviceTypes = ALL_SPECIALTIES
+
 
     // Archivo temporal para la foto
     val photoFile = remember {
@@ -112,15 +126,24 @@ fun NewRequestScreen(navController: NavController) {
                 location?.let {
                     lat = it.latitude
                     lng = it.longitude
-                    address = "Lat: ${"%.4f".format(lat)}, Lng: ${"%.4f".format(lng)}"
+                    //SOLO ME MUESTRA 4 DECIMALES, DESPUES DEL PUNTO, LO MEJOR ES A 6
+
+                    address = "Lat: ${"%.6f".format(lat)}, Lng: ${"%.6f".format(lng)}"
                     locationLoaded = true
                 }
             }
         }
     }
 
-    // Obtener ubicación automáticamente al abrir
+    // Obtener ubicación automáticamente al abrir AJUSTAR ESTO
     LaunchedEffect(Unit) {
+
+        // Cargar distrito del cliente
+        db.collection("users").document(uid).get()
+            .addOnSuccessListener { doc ->
+                clientDistrict = doc.getString("district") ?: ""
+            }
+
         locationPermissionLauncher.launch(
             arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
@@ -128,6 +151,7 @@ fun NewRequestScreen(navController: NavController) {
             )
         )
     }
+
 
     fun publishRequest() {
         if (serviceType.isEmpty()) { errorMessage = "Selecciona el tipo de servicio"; return }
@@ -147,6 +171,10 @@ fun NewRequestScreen(navController: NavController) {
                 lat = lat,
                 lng = lng,
                 address = address,
+
+                district = clientDistrict,    // ← nuevo
+                reference = reference,         // ← nuevo
+
                 status = "pendiente",
                 isUrgent = isUrgent,
                 createdAt = System.currentTimeMillis(),
@@ -165,18 +193,18 @@ fun NewRequestScreen(navController: NavController) {
                 }
         }
 
-        // Subir foto si hay una
         if (photoUri != null) {
-            val ref = storage.reference.child("requests/$uid/${UUID.randomUUID()}.jpg")
-            ref.putFile(photoUri!!)
-                .addOnSuccessListener {
-                    ref.downloadUrl.addOnSuccessListener { url ->
-                        saveRequest(url.toString())
-                    }
-                }
-                .addOnFailureListener {
-                    saveRequest("") // Si falla la foto, guarda sin imagen
-                }
+            scope.launch {
+                val result = CloudinaryUploader.uploadImage(
+                    context = context,
+                    uri = photoUri!!,
+                    folder = "homefix/requests"
+                )
+                result.fold(
+                    onSuccess = { url -> saveRequest(url) },
+                    onFailure = { saveRequest("") }
+                )
+            }
         } else {
             saveRequest("")
         }
@@ -386,6 +414,25 @@ fun NewRequestScreen(navController: NavController) {
                 onValueChange = { address = it },
                 label = "O escribe la dirección manualmente"
             )
+
+
+            //NUEVO TEXTBOX PARA AGREGAR REFERENCIA DE DIRECCION:
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HomefixTextField(
+                value = reference,
+                onValueChange = { reference = it },
+                label = "Referencia (opcional)",
+                singleLine = false
+            )
+            Text(
+                text = "Ej: Frente al parque, casa de rejas azules",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
+            )
+
+
 
             Spacer(modifier = Modifier.height(16.dp))
 

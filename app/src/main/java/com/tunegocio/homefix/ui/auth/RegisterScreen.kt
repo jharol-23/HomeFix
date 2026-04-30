@@ -1,94 +1,209 @@
 package com.tunegocio.homefix.ui.auth
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import com.tunegocio.homefix.data.model.UserModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.components.HomefixButton
 import com.tunegocio.homefix.ui.components.HomefixTextField
-import com.tunegocio.homefix.ui.components.isValidEmail
-import com.tunegocio.homefix.ui.theme.*
-
 import com.tunegocio.homefix.ui.components.PasswordRequirements
+import com.tunegocio.homefix.ui.components.isValidEmail
 import com.tunegocio.homefix.ui.components.validatePassword
+import com.tunegocio.homefix.ui.theme.*
+import java.io.File
+import java.util.UUID
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.tunegocio.homefix.data.CloudinaryUploader
+import com.tunegocio.homefix.data.CloudinaryConfig
+
+import com.tunegocio.homefix.data.ALL_SPECIALTIES
+import com.tunegocio.homefix.data.MAX_SPECIALTIES
+
+
+
+
+
+
+/*val ALL_SPECIALTIES = listOf(
+    "Electricidad", "Gasfitería", "Pintura", "Carpintería",
+    "Vidriería", "Jardinería", "Cerrajería", "Albañilería",
+    "Muebles a medida", "Lavado de tapizados", "Mudanzas"
+)
+*/
+val LIMA_DISTRICTS = listOf(
+    "Ancón", "Ate", "Barranco", "Breña", "Carabayllo",
+    "Cercado de Lima", "Chaclacayo", "Chorrillos", "Cieneguilla",
+    "Comas", "El Agustino", "Independencia", "Jesús María",
+    "La Molina", "La Victoria", "Lince", "Los Olivos",
+    "Lurigancho", "Lurín", "Magdalena del Mar", "Miraflores",
+    "Pachacámac", "Pucusana", "Pueblo Libre", "Puente Piedra",
+    "Punta Hermosa", "Punta Negra", "Rímac", "San Bartolo",
+    "San Borja", "San Isidro", "San Juan de Lurigancho",
+    "San Juan de Miraflores", "San Luis", "San Martín de Porres",
+    "San Miguel", "Santa Anita", "Santa María del Mar",
+    "Santa Rosa", "Santiago de Surco", "Surquillo",
+    "Villa El Salvador", "Villa María del Triunfo"
+)
+
+// const val MAX_SPECIALTIES = 3
+
+@OptIn(ExperimentalLayoutApi::class)
+
 
 @Composable
 fun RegisterScreen(navController: NavController) {
 
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
+    val storage = FirebaseStorage.getInstance()
+    val context = LocalContext.current
 
     // Campos comunes
-    var name by remember { mutableStateOf("") }
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-
     var confirmPassword by remember { mutableStateOf("") }
-    var confirmPasswordError by remember { mutableStateOf("") }
-
     var phone by remember { mutableStateOf("") }
     var selectedRole by remember { mutableStateOf("") }
+    var selectedDistrict by remember { mutableStateOf("") }
+    var showDistrictDialog by remember { mutableStateOf(false) }
+
+    // Selfie — ambos roles
+    var selfieUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val scope = rememberCoroutineScope()
 
     // Campos solo técnico
     var dni by remember { mutableStateOf("") }
     var yearsExp by remember { mutableStateOf("") }
     var selectedSpecialties by remember { mutableStateOf(listOf<String>()) }
+    var showSpecialtyDialog by remember { mutableStateOf(false) }
 
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
     // Errores por campo
-    var nameError by remember { mutableStateOf("") }
+    var firstNameError by remember { mutableStateOf("") }
+    var lastNameError by remember { mutableStateOf("") }
     var emailError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
+    var confirmPasswordError by remember { mutableStateOf("") }
     var phoneError by remember { mutableStateOf("") }
-    var dniError by remember { mutableStateOf("") }
+    var districtError by remember { mutableStateOf("") }
+    var selfieError by remember { mutableStateOf("") }
     var roleError by remember { mutableStateOf("") }
+    var dniError by remember { mutableStateOf("") }
     var specialtyError by remember { mutableStateOf("") }
 
-    val specialties = listOf(
-        "Electricidad", "Gasfitería", "Carpintería",
-        "Pintura", "Albañilería", "Otros"
-    )
+    // Archivo temporal para selfie
+    val selfieFile = remember { File(context.cacheDir, "selfie_${UUID.randomUUID()}.jpg") }
+    val selfieUriForCamera = remember {
+        FileProvider.getUriForFile(context, "${context.packageName}.provider", selfieFile)
+    }
+
+    // Launcher cámara frontal
+    val selfieLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            selfieUri = selfieUriForCamera
+            selfieError = ""
+        }
+    }
+
+    // Launcher permiso cámara
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) selfieLauncher.launch(selfieUriForCamera)
+    }
+
+    // Diálogo distrito
+    if (showDistrictDialog) {
+        DistrictPickerDialog(
+            districts = LIMA_DISTRICTS,
+            selectedDistrict = selectedDistrict,
+            onDismiss = { showDistrictDialog = false },
+            onConfirm = { district ->
+                selectedDistrict = district
+                districtError = ""
+                showDistrictDialog = false
+            }
+        )
+    }
+
+    // Diálogo especialidades
+    if (showSpecialtyDialog) {
+        SpecialtyPickerDialog(
+            allSpecialties = ALL_SPECIALTIES,
+            selectedSpecialties = selectedSpecialties,
+            maxSelection = MAX_SPECIALTIES,
+            onDismiss = { showSpecialtyDialog = false },
+            onConfirm = { selected ->
+                selectedSpecialties = selected
+                specialtyError = ""
+                showSpecialtyDialog = false
+            }
+        )
+    }
 
     fun register() {
-        // Limpiar errores anteriores
-        nameError = ""
-        emailError = ""
-        passwordError = ""
-        phoneError = ""
-        dniError = ""
-        roleError = ""
-        specialtyError = ""
-        errorMessage = ""
+        // Limpiar errores
+        firstNameError = ""; lastNameError = ""; emailError = ""
+        passwordError = ""; confirmPasswordError = ""; phoneError = ""
+        districtError = ""; selfieError = ""; roleError = ""
+        dniError = ""; specialtyError = ""; errorMessage = ""
 
         var hasError = false
 
-        // Validar nombre
-        if (name.isBlank()) {
-            nameError = "El nombre es obligatorio"
+        if (firstName.isBlank()) {
+            firstNameError = "Los nombres son obligatorios"
             hasError = true
-        } else if (name.trim().length < 3) {
-            nameError = "Mínimo 3 caracteres"
+        } else if (firstName.trim().length < 2) {
+            firstNameError = "Mínimo 2 caracteres"
             hasError = true
         }
 
-        // Validar email
+        if (lastName.isBlank()) {
+            lastNameError = "Los apellidos son obligatorios"
+            hasError = true
+        } else if (lastName.trim().length < 2) {
+            lastNameError = "Mínimo 2 caracteres"
+            hasError = true
+        }
+
         if (email.isBlank()) {
             emailError = "El correo es obligatorio"
             hasError = true
@@ -97,7 +212,6 @@ fun RegisterScreen(navController: NavController) {
             hasError = true
         }
 
-        // Validar contraseña
         if (password.isBlank()) {
             passwordError = "La contraseña es obligatoria"
             hasError = true
@@ -115,7 +229,6 @@ fun RegisterScreen(navController: NavController) {
             }
         }
 
-        // Validar confirmación de contraseña
         if (confirmPassword.isBlank()) {
             confirmPasswordError = "Confirma tu contraseña"
             hasError = true
@@ -124,16 +237,6 @@ fun RegisterScreen(navController: NavController) {
             hasError = true
         }
 
-        /* Validar contraseña
-        if (password.isBlank()) {
-            passwordError = "La contraseña es obligatoria"
-            hasError = true
-        } else if (password.length < 6) {
-            passwordError = "Mínimo 6 caracteres"
-            hasError = true
-        }*/
-
-        // Validar teléfono
         if (phone.isBlank()) {
             phoneError = "El teléfono es obligatorio"
             hasError = true
@@ -142,13 +245,23 @@ fun RegisterScreen(navController: NavController) {
             hasError = true
         }
 
-        // Validar rol
+        if (selectedDistrict.isEmpty()) {
+            districtError = "Selecciona tu distrito"
+            hasError = true
+        }
+
         if (selectedRole.isEmpty()) {
             roleError = "Selecciona cómo quieres usar HomeFix"
             hasError = true
         }
 
-        // Validaciones solo para técnico
+        // Selfie obligatoria para ambos
+        if (selfieUri == null) {
+            selfieError = "La foto de perfil es obligatoria"
+            hasError = true
+        }
+
+        // Validaciones solo técnico
         if (selectedRole == "technician") {
             if (dni.isBlank()) {
                 dniError = "El DNI es obligatorio"
@@ -164,37 +277,67 @@ fun RegisterScreen(navController: NavController) {
         }
 
         if (hasError) return
-
         isLoading = true
+
+        val fullName = "${firstName.trim()} ${lastName.trim()}"
 
         auth.createUserWithEmailAndPassword(email.trim(), password)
             .addOnSuccessListener { result ->
                 val uid = result.user?.uid ?: return@addOnSuccessListener
-                val user = UserModel(
-                    uid = uid,
-                    name = name.trim(),
-                    email = email.trim(),
-                    role = selectedRole,
-                    phone = phone.trim(),
-                    dni = if (selectedRole == "technician") dni.trim() else "",
-                    yearsExp = yearsExp.toIntOrNull() ?: 0,
-                    specialties = selectedSpecialties,
-                    whatsapp = phone.trim(),
-                    createdAt = System.currentTimeMillis()
-                )
-                db.collection("users").document(uid).set(user)
-                    .addOnSuccessListener {
-                        isLoading = false
-                        if (selectedRole == "technician") {
-                            navController.navigate(Routes.HOME_TECHNICIAN) {
-                                popUpTo(Routes.REGISTER) { inclusive = true }
-                            }
-                        } else {
-                            navController.navigate(Routes.HOME_CLIENT) {
-                                popUpTo(Routes.REGISTER) { inclusive = true }
+
+                fun saveUser(selfieUrl: String) {
+                    val user = UserModel(
+                        uid = uid,
+                        name = fullName,
+                        email = email.trim(),
+                        role = selectedRole,
+                        phone = phone.trim(),
+                        district = selectedDistrict,
+                        selfieUrl = selfieUrl,
+                        dni = if (selectedRole == "technician") dni.trim() else "",
+                        yearsExp = yearsExp.toIntOrNull() ?: 0,
+                        specialties = selectedSpecialties,
+                        whatsapp = phone.trim(),
+                        createdAt = System.currentTimeMillis()
+                    )
+                    db.collection("users").document(uid).set(user)
+                        .addOnSuccessListener {
+                            isLoading = false
+                            if (selectedRole == "technician") {
+                                navController.navigate(Routes.HOME_TECHNICIAN) {
+                                    popUpTo(Routes.REGISTER) { inclusive = true }
+                                }
+                            } else {
+                                navController.navigate(Routes.HOME_CLIENT) {
+                                    popUpTo(Routes.REGISTER) { inclusive = true }
+                                }
                             }
                         }
+                        .addOnFailureListener {
+                            isLoading = false
+                            errorMessage = "Error al guardar datos, intenta de nuevo"
+                        }
+                }
+
+                // Subir selfie a Cloudinary
+                if (selfieUri != null) {
+                    scope.launch {
+                        val result = CloudinaryUploader.uploadImage(
+                            context = context,
+                            uri = selfieUri!!,
+                            folder = "homefix/selfies"
+                        )
+                        result.fold(
+                            onSuccess = { url -> saveUser(url) },
+                            onFailure = {
+                                isLoading = false
+                                errorMessage = "Error al subir la foto, intenta de nuevo"
+                            }
+                        )
                     }
+                } else {
+                    saveUser("")
+                }
             }
             .addOnFailureListener { e ->
                 isLoading = false
@@ -202,7 +345,7 @@ fun RegisterScreen(navController: NavController) {
                     e.message?.contains("email") == true ->
                         emailError = "Ese correo ya está registrado"
                     e.message?.contains("password") == true ->
-                        passwordError = "La contraseña debe tener mínimo 6 caracteres"
+                        passwordError = "La contraseña debe tener mínimo 8 caracteres"
                     else -> errorMessage = "Error al registrarse, intenta de nuevo"
                 }
             }
@@ -256,10 +399,7 @@ fun RegisterScreen(navController: NavController) {
                     isSelected = selectedRole == "client",
                     color = ClientColor,
                     modifier = Modifier.weight(1f),
-                    onClick = {
-                        selectedRole = "client"
-                        roleError = ""
-                    }
+                    onClick = { selectedRole = "client"; roleError = "" }
                 )
                 RoleCard(
                     title = "Técnico",
@@ -268,38 +408,49 @@ fun RegisterScreen(navController: NavController) {
                     isSelected = selectedRole == "technician",
                     color = TechnicianColor,
                     modifier = Modifier.weight(1f),
-                    onClick = {
-                        selectedRole = "technician"
-                        roleError = ""
-                    }
+                    onClick = { selectedRole = "technician"; roleError = "" }
                 )
             }
-            // Error de rol
             if (roleError.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = roleError,
                     color = Error,
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp)
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
                 )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Nombre
-            HomefixTextField(
-                value = name,
-                onValueChange = {
-                    name = it
-                    if (it.isNotBlank()) nameError = ""
-                },
-                label = "Nombre completo",
-                isError = nameError.isNotEmpty(),
-                errorMessage = nameError
-            )
+            // Nombres y Apellidos
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                HomefixTextField(
+                    value = firstName,
+                    onValueChange = {
+                        firstName = it
+                        if (it.isNotBlank()) firstNameError = ""
+                    },
+                    label = "Nombres",
+                    modifier = Modifier.weight(1f),
+                    isError = firstNameError.isNotEmpty(),
+                    errorMessage = firstNameError
+                )
+                HomefixTextField(
+                    value = lastName,
+                    onValueChange = {
+                        lastName = it
+                        if (it.isNotBlank()) lastNameError = ""
+                    },
+                    label = "Apellidos",
+                    modifier = Modifier.weight(1f),
+                    isError = lastNameError.isNotEmpty(),
+                    errorMessage = lastNameError
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
             // Email
@@ -316,36 +467,20 @@ fun RegisterScreen(navController: NavController) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            /* Contraseña
-            HomefixTextField(
-                value = password,
-                onValueChange = {
-                    password = it
-                    if (it.isNotBlank()) passwordError = ""
-                },
-                label = "Contraseña",
-                isPassword = true,
-                isError = passwordError.isNotEmpty(),
-                errorMessage = passwordError
-            )
-            Spacer(modifier = Modifier.height(12.dp))*/
-
             // Contraseña
             HomefixTextField(
                 value = password,
                 onValueChange = {
                     password = it
                     if (it.isNotBlank()) passwordError = ""
-                    confirmPasswordError = "" // limpia también confirmación al cambiar
+                    confirmPasswordError = ""
                 },
                 label = "Contraseña",
                 isPassword = true,
                 isError = passwordError.isNotEmpty(),
                 errorMessage = passwordError
             )
-            // Requisitos en tiempo real
             PasswordRequirements(password = password)
-
             Spacer(modifier = Modifier.height(12.dp))
 
             // Confirmar contraseña
@@ -376,11 +511,158 @@ fun RegisterScreen(navController: NavController) {
                 errorMessage = phoneError,
                 keyboardType = KeyboardType.Number
             )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Distrito
+            Text(
+                text = "Distrito",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextPrimary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = { showDistrictDialog = true },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = if (districtError.isNotEmpty()) Error else Primary
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (districtError.isNotEmpty()) Error else CardBorder
+                )
+            ) {
+                Icon(
+                    Icons.Default.LocationOn,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (selectedDistrict.isEmpty())
+                        "Selecciona tu distrito"
+                    else
+                        selectedDistrict,
+                    fontWeight = if (selectedDistrict.isNotEmpty())
+                        FontWeight.Medium else FontWeight.Normal
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(
+                    Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            if (districtError.isNotEmpty()) {
+                Text(
+                    text = districtError,
+                    color = Error,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Selfie — obligatoria para ambos roles
+            HorizontalDivider(color = CardBorder)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Foto de perfil",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextPrimary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Tómate una selfie en este momento. Es obligatoria para todos los usuarios.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (selfieUri != null) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = selfieUri,
+                        contentDescription = "Selfie",
+                        modifier = Modifier
+                            .size(110.dp)
+                            .clip(RoundedCornerShape(55.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-80).dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Error
+                    ) {
+                        IconButton(
+                            onClick = { selfieUri = null },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Repetir selfie",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Toca la X para tomar otra foto",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            } else {
+                OutlinedButton(
+                    onClick = {
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (selfieError.isNotEmpty()) Error else Primary
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (selfieError.isNotEmpty()) Error else CardBorder
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Tomar selfie ahora")
+                }
+                if (selfieError.isNotEmpty()) {
+                    Text(
+                        text = selfieError,
+                        color = Error,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp)
+                    )
+                }
+            }
 
             // Campos solo para técnico
             if (selectedRole == "technician") {
                 Spacer(modifier = Modifier.height(20.dp))
-                Divider(color = CardBorder)
+                HorizontalDivider(color = CardBorder)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
@@ -423,56 +705,96 @@ fun RegisterScreen(navController: NavController) {
 
                 // Especialidades
                 Text(
-                    text = "Especialidades",
+                    text = "Especialidades (máximo $MAX_SPECIALTIES)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextPrimary,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                specialties.chunked(3).forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        row.forEach { specialty ->
-                            val isSelected = selectedSpecialties.contains(specialty)
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    selectedSpecialties = if (isSelected) {
-                                        selectedSpecialties - specialty
-                                    } else {
-                                        selectedSpecialties + specialty
-                                    }
-                                    specialtyError = ""
-                                },
-                                label = {
-                                    Text(
-                                        specialty,
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Secondary,
-                                    selectedLabelColor = Color.White
-                                )
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedButton(
+                    onClick = { showSpecialtyDialog = true },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (specialtyError.isNotEmpty()) Error else Primary
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (specialtyError.isNotEmpty()) Error else CardBorder
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Build,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (selectedSpecialties.isEmpty())
+                            "Seleccionar especialidades"
+                        else
+                            "${selectedSpecialties.size} seleccionada${if (selectedSpecialties.size > 1) "s" else ""}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
 
-                // Error de especialidad
                 if (specialtyError.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = specialtyError,
                         color = Error,
                         style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 4.dp)
+                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp)
                     )
+                }
+
+                // Chips de especialidades seleccionadas
+                if (selectedSpecialties.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        selectedSpecialties.forEach { specialty ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = TechnicianColor.copy(alpha = 0.1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(
+                                        horizontal = 10.dp,
+                                        vertical = 5.dp
+                                    ),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = specialty,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TechnicianColor
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Quitar",
+                                        tint = TechnicianColor,
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clickable {
+                                                selectedSpecialties =
+                                                    selectedSpecialties - specialty
+                                            }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -518,6 +840,184 @@ fun RegisterScreen(navController: NavController) {
     }
 }
 
+// Diálogo selector de distrito
+@Composable
+fun DistrictPickerDialog(
+    districts: List<String>,
+    selectedDistrict: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val filtered = districts.filter {
+        it.contains(searchQuery, ignoreCase = true)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = "Selecciona tu distrito",
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Buscar distrito...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Primary,
+                        unfocusedBorderColor = CardBorder
+                    )
+                )
+            }
+        },
+        text = {
+            Column {
+                if (filtered.isEmpty()) {
+                    Text(
+                        text = "No se encontró ese distrito",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                } else {
+                    filtered.forEach { district ->
+                        val isSelected = district == selectedDistrict
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onConfirm(district) }
+                                .background(
+                                    if (isSelected) Primary.copy(alpha = 0.08f)
+                                    else Color.Transparent,
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = district,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isSelected) Primary else TextPrimary,
+                                fontWeight = if (isSelected) FontWeight.SemiBold
+                                else FontWeight.Normal
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar", color = TextSecondary)
+            }
+        }
+    )
+}
+
+// Diálogo selector de especialidades
+@Composable
+fun SpecialtyPickerDialog(
+    allSpecialties: List<String>,
+    selectedSpecialties: List<String>,
+    maxSelection: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (List<String>) -> Unit
+) {
+    var tempSelected by remember { mutableStateOf(selectedSpecialties) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(
+                    text = "Selecciona tus especialidades",
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Máximo $maxSelection — ${tempSelected.size}/$maxSelection seleccionadas",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (tempSelected.size == maxSelection) Error else TextSecondary
+                )
+            }
+        },
+        text = {
+            Column {
+                allSpecialties.forEach { specialty ->
+                    val isSelected = tempSelected.contains(specialty)
+                    val isDisabled = !isSelected && tempSelected.size >= maxSelection
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isDisabled) {
+                                tempSelected = if (isSelected) {
+                                    tempSelected - specialty
+                                } else {
+                                    tempSelected + specialty
+                                }
+                            }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = null,
+                            enabled = !isDisabled,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = TechnicianColor
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = specialty,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isDisabled) TextHint else TextPrimary
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(tempSelected) },
+                enabled = tempSelected.isNotEmpty()
+            ) {
+                Text(
+                    "Confirmar",
+                    color = if (tempSelected.isNotEmpty()) Primary else TextSecondary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar", color = TextSecondary)
+            }
+        }
+    )
+}
+
 @Composable
 fun RoleCard(
     title: String,
@@ -542,10 +1042,7 @@ fun RoleCard(
             modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = emoji,
-                style = MaterialTheme.typography.headlineMedium
-            )
+            Text(text = emoji, style = MaterialTheme.typography.headlineLarge)
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = title,

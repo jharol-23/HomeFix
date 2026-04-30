@@ -73,6 +73,7 @@ dependencies {
 
     // Corrutinas — nuevo
     implementation(libs.coroutines.android)
+    implementation(libs.androidx.compose.foundation)
 
     // Testing — ya venían
     testImplementation(libs.junit)
@@ -85,4 +86,6 @@ dependencies {
 
 
     implementation(libs.compose.icons.extended)
+
+    implementation(libs.okhttp)
 }

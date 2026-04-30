@@ -17,7 +17,13 @@ import com.tunegocio.homefix.ui.client.NewRequestScreen
 import com.tunegocio.homefix.ui.technician.RequestDetailScreen
 
 import com.tunegocio.homefix.ui.shared.ProfileScreen
+import com.tunegocio.homefix.ui.client.TechnicianListScreen
 
+import com.tunegocio.homefix.ui.client.RequestTrackingScreen
+
+import com.tunegocio.homefix.ui.shared.RatingScreen
+import com.tunegocio.homefix.ui.shared.HistoryScreen
+import com.tunegocio.homefix.ui.technician.EarningsScreen
 
 
 @Composable
@@ -81,17 +87,31 @@ fun AppNavigation(
 
         // LO HACE ASHLEY
         composable(Routes.TECHNICIAN_LIST) {  // LO HARA ASHLEY
-            // Por ahora pantalla vacía — la haremos después
+            TechnicianListScreen(navController = navController)
         }
 
         composable(Routes.REQUEST_TRACKING) { backStackEntry ->
             val requestId = backStackEntry.arguments?.getString("requestId") ?: ""
-            // Por ahora vacía — la haremos después
+            RequestTrackingScreen(
+                navController = navController,
+                requestId = requestId
+            )
         }
 
+        // DESPUES DE MEJORAR REGISTRO SON ESTAS VISTAS
 
+        composable(Routes.RATING) { backStackEntry ->
+            val requestId = backStackEntry.arguments?.getString("requestId") ?: ""
+            RatingScreen(navController = navController, requestId = requestId)
+        }
 
+        composable(Routes.HISTORY) {
+            HistoryScreen(navController = navController)
+        }
 
+        composable(Routes.EARNINGS) {
+            EarningsScreen(navController = navController)
+        }
 
 
     }

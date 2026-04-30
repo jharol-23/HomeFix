@@ -10,8 +10,13 @@ data class RequestModel(
     val lat: Double = 0.0,
     val lng: Double = 0.0,
     val address: String = "",
+
+    val district: String = "",        // ← nuevo
+    val reference: String = "",       // ← nuevo — para la referencia manual
+
     val status: String = "pendiente",
     val isUrgent: Boolean = false,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L
 )
+

@@ -9,6 +9,8 @@ activityCompose = "1.13.0"
 kotlin = "2.2.10"
 composeBom = "2024.09.00"
 
+okhttp = "4.12.0"
+
 firebase = "33.7.0"
 navigationCompose = "2.8.5"
 viewmodelCompose = "2.10.0"
@@ -18,6 +20,7 @@ cameraX = "1.4.1"
 coil = "2.7.0"
 coroutines = "1.9.0"
 googleServices = "4.4.2"
+foundation = "1.10.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -52,6 +55,8 @@ coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 
 compose-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
