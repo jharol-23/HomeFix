@@ -17,6 +17,7 @@ import com.tunegocio.homefix.ui.client.NewRequestScreen
 import com.tunegocio.homefix.ui.technician.RequestDetailScreen
 
 import com.tunegocio.homefix.ui.shared.ProfileScreen
+import com.tunegocio.homefix.ui.shared.SettingsScreen
 import com.tunegocio.homefix.ui.client.TechnicianListScreen
 
 import com.tunegocio.homefix.ui.client.RequestTrackingScreen
@@ -80,6 +81,9 @@ fun AppNavigation(
 
         composable(Routes.PROFILE) {
             ProfileScreen(navController = navController)
+        }
+        composable(Routes.SETTINGS) {
+            SettingsScreen(navController = navController)
         }
         composable(Routes.EARNINGS) {
             // Por ahora pantalla vacía — la haremos después

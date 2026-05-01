@@ -305,7 +305,8 @@ fun RegisterScreen(navController: NavController) {
                 fun saveUser(selfieUrl: String) {
                     val user = UserModel(
                         uid = uid,
-                        name = fullName,
+                        name = firstName.trim(),
+                        lastName = lastName.trim(),
                         email = email.trim(),
                         role = selectedRole,
                         phone = phone.trim(),

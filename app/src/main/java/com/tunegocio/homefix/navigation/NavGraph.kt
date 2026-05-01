@@ -21,7 +21,7 @@ object Routes {
     const val PROFILE = "profile"
     const val HISTORY = "history"
     const val RATING = "rating/{requestId}"
-
+    const val SETTINGS = "settings"
 
     const val VERIFICAR_EMAIL = "verificar_email"
     const val OLVIDE_CONTRASENA = "olvide_contrasena"

@@ -88,4 +88,6 @@ dependencies {
     implementation(libs.compose.icons.extended)
 
     implementation(libs.okhttp)
+
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
 }
