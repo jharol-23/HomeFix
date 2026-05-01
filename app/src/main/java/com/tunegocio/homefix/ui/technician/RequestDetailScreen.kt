@@ -45,6 +45,10 @@ fun RequestDetailScreen(
     var actionLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
+    // Repositorio para crear notificaciones
+    val notificationsRepo = remember { com.tunegocio.homefix.data.NotificationsRepository() }
+
+
     LaunchedEffect(requestId) {
         // Cargar solicitud
         db.collection("requests").document(requestId).get()
@@ -63,23 +67,34 @@ fun RequestDetailScreen(
 
     fun acceptRequest() {
         actionLoading = true
+        // Agrega el técnico a la lista de interesados sin cambiar el status
         db.collection("requests").document(requestId)
             .update(
                 mapOf(
-                    "status" to "aceptada",
-                    "technicianId" to technicianId,
+                    "interestedTechnicians" to com.google.firebase.firestore.FieldValue.arrayUnion(technicianId),
                     "updatedAt" to System.currentTimeMillis()
                 )
             )
             .addOnSuccessListener {
-                actionLoading = false
-                navController.navigate(Routes.HOME_TECHNICIAN) {
-                    popUpTo(Routes.HOME_TECHNICIAN) { inclusive = true }
+                // Notifica al cliente que hay un técnico interesado
+                request?.clientId?.let { clientId ->
+                    notificationsRepo.crearNotificacion(
+                        userId = clientId,
+                        titulo = "¡Un técnico está interesado!",
+                        cuerpo = "Alguien quiere atender tu solicitud de ${request?.serviceType}. Revísala para elegir.",
+                        tipo = "tecnico_aceptado",
+                        requestId = requestId
+                    )
                 }
+                actionLoading = false
+                // Se queda en pantalla mostrando confirmación
+                request = request?.copy(
+                    interestedTechnicians = (request?.interestedTechnicians ?: emptyList()) + technicianId
+                )
             }
             .addOnFailureListener {
                 actionLoading = false
-                errorMessage = "Error al aceptar la solicitud"
+                errorMessage = "Error al registrar interés"
             }
     }
 
@@ -99,10 +114,16 @@ fun RequestDetailScreen(
             .addOnSuccessListener {
                 actionLoading = false
                 request = request?.copy(status = "en_camino")
-            }
-            .addOnFailureListener {
-                actionLoading = false
-                errorMessage = "Error al actualizar"
+                // Notificar al cliente que el técnico está en camino
+                request?.clientId?.let { clientId ->
+                    notificationsRepo.crearNotificacion(
+                        userId = clientId,
+                        titulo = "¡Tu técnico está en camino!",
+                        cuerpo = "El técnico ya salió hacia tu ubicación para atender tu solicitud de ${request?.serviceType}.",
+                        tipo = "en_camino",
+                        requestId = requestId
+                    )
+                }
             }
     }
 
@@ -116,14 +137,20 @@ fun RequestDetailScreen(
                 )
             )
             .addOnSuccessListener {
+                // Notificar al cliente que el servicio fue completado
+                request?.clientId?.let { clientId ->
+                    notificationsRepo.crearNotificacion(
+                        userId = clientId,
+                        titulo = "Servicio completado",
+                        cuerpo = "Tu solicitud de ${request?.serviceType} fue marcada como completada. ¡No olvides calificar al técnico!",
+                        tipo = "completado",
+                        requestId = requestId
+                    )
+                }
                 actionLoading = false
                 navController.navigate(Routes.HOME_TECHNICIAN) {
                     popUpTo(Routes.HOME_TECHNICIAN) { inclusive = true }
                 }
-            }
-            .addOnFailureListener {
-                actionLoading = false
-                errorMessage = "Error al completar"
             }
     }
 
@@ -391,10 +418,10 @@ fun RequestDetailScreen(
             when (req.status) {
                 "pendiente", "en_revision" -> {
                     HomefixButton(
-                        text = "✓ Aceptar solicitud",
+                        text = "👍 Me interesa",
                         onClick = { acceptRequest() },
                         isLoading = actionLoading,
-                        color = Success
+                        color = Primary
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(
@@ -402,11 +429,8 @@ fun RequestDetailScreen(
                         modifier = Modifier.fillMaxWidth().height(52.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Error)
-                    ) {
-                        Text(
-                            "✕ Rechazar",
-                            style = MaterialTheme.typography.labelLarge
-                        )
+                    ){
+                        Text("✕ No me interesa", style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 "aceptada" -> {

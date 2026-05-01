@@ -37,6 +37,9 @@ fun EarningsScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var averageRating by remember { mutableStateOf(0f) }
 
+    var seccionReseñasExpandida by remember { mutableStateOf(true) }
+    var seccionServiciosExpandida by remember { mutableStateOf(true) }
+
     LaunchedEffect(uid) {
         // Cargar servicios completados
         db.collection("requests")
@@ -158,41 +161,67 @@ fun EarningsScreen(navController: NavController) {
                 if (reviews.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Reseñas recientes",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { seccionReseñasExpandida = !seccionReseñasExpandida },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Reseñas recientes",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(
+                                imageVector = if (seccionReseñasExpandida) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = TextSecondary
+                            )
+                        }
                     }
 
-                    items(reviews.sortedByDescending { it.createdAt }.take(5)) { review ->
-                        ReviewCard(review = review)
+                    if (seccionReseñasExpandida) {
+                        items(reviews.sortedByDescending { it.createdAt }.take(5)) { review ->
+                            ReviewCard(review = review)
+                        }
                     }
                 }
-
                 // Servicios completados recientes
                 if (completedRequests.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Servicios completados",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = TextPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { seccionServiciosExpandida = !seccionServiciosExpandida },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Servicios completados",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(
+                                imageVector = if (seccionServiciosExpandida) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = TextSecondary
+                            )
+                        }
                     }
 
-                    items(completedRequests.take(10)) { request ->
-                        CompletedServiceCard(
-                            request = request,
-                            onClick = {
-                                navController.navigate(
-                                    Routes.requestDetail(request.requestId)
-                                )
-                            }
-                        )
+                    if (seccionServiciosExpandida) {
+                        items(completedRequests.take(10)) { request ->
+                            CompletedServiceCard(
+                                request = request
+                            )
+
+                        }
                     }
+
                 }
 
                 item { Spacer(modifier = Modifier.height(20.dp)) }
@@ -298,57 +327,142 @@ fun ReviewCard(review: ReviewModel) {
 
 @Composable
 fun CompletedServiceCard(
-    request: RequestModel,
-    onClick: () -> Unit
-) {
+    request: RequestModel
+){
     val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     val date = dateFormat.format(Date(request.createdAt))
+    var expandido by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable { expandido = !expandido },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = RoundedCornerShape(10.dp),
-                color = Success.copy(alpha = 0.1f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = Success,
-                        modifier = Modifier.size(22.dp)
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Fila principal
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(40.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Success.copy(alpha = 0.1f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Success,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = request.serviceType,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = date,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary
                     )
                 }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = request.serviceType,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = date,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
+                Icon(
+                    imageVector = if (expandido) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(20.dp)
+
+            // Detalle expandible
+            if (expandido) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = TextHint.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (request.description.isNotEmpty()) {
+                    FilaDetalle(
+                        icono = Icons.Default.Description,
+                        etiqueta = "Descripción",
+                        valor = request.description
+                    )
+                }
+                if (request.address.isNotEmpty()) {
+                    FilaDetalle(
+                        icono = Icons.Default.LocationOn,
+                        etiqueta = "Dirección",
+                        valor = request.address
+                    )
+                }
+                if (request.district.isNotEmpty()) {
+                    FilaDetalle(
+                        icono = Icons.Default.Map,
+                        etiqueta = "Distrito",
+                        valor = request.district
+                    )
+                }
+                if (request.reference.isNotEmpty()) {
+                    FilaDetalle(
+                        icono = Icons.Default.Info,
+                        etiqueta = "Referencia",
+                        valor = request.reference
+                    )
+                }
+                if (request.isUrgent) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFFF6B6B).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "⚡ Urgente",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFFF6B6B),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilaDetalle(
+    icono: androidx.compose.ui.graphics.vector.ImageVector,
+    etiqueta: String,
+    valor: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            icono,
+            contentDescription = null,
+            tint = TextSecondary,
+            modifier = Modifier.size(15.dp).padding(top = 2.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Column {
+            Text(
+                text = etiqueta,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary
+            )
+            Text(
+                text = valor,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextPrimary
             )
         }
     }

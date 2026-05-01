@@ -1,5 +1,11 @@
 package com.tunegocio.homefix.navigation
 
+
+
+import com.tunegocio.homefix.ui.shared.NotificationsScreen
+import com.tunegocio.homefix.ui.shared.SettingsScreen
+
+
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -30,12 +36,23 @@ import com.tunegocio.homefix.ui.technician.EarningsScreen
 fun AppNavigation(
     navController: NavHostController = rememberNavController()
 ) {
+
     NavHost(
         navController = navController,
         startDestination = Routes.SPLASH
 
 
     ) {
+
+        // Notificaciones — ambos roles
+        composable(Routes.NOTIFICATIONS) {
+            NotificationsScreen(navController = navController)
+        }
+
+        // Ajustes — ambos roles
+        composable(Routes.SETTINGS) {
+            SettingsScreen(navController = navController)
+        }
 
         // Dentro del NavHost agrega:
         composable(Routes.NEW_REQUEST) {

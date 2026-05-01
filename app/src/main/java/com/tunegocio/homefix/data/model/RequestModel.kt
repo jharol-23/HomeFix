@@ -12,11 +12,13 @@ data class RequestModel(
     val address: String = "",
 
     val district: String = "",        // ← nuevo
-    val reference: String = "",       // ← nuevo — para la referencia manual
+    val reference: String = "",
+    val interestedTechnicians: List<String> = emptyList(), // UIDs de técnicos interesados// ← nuevo — para la referencia manual
 
     val status: String = "pendiente",
     val isUrgent: Boolean = false,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L
+
 )
 

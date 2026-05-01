@@ -1,5 +1,13 @@
 package com.tunegocio.homefix.ui.technician
 
+
+
+
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tunegocio.homefix.viewmodel.NotificationsViewModel
+
+
+
 import android.Manifest
 import android.annotation.SuppressLint
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,7 +49,7 @@ fun HomeTechnicianScreen(navController: NavController) {
 
     var userName by remember { mutableStateOf("") }
     var userDistrict by remember { mutableStateOf("") }
-    var isActive by remember { mutableStateOf(false) }
+    var isActive by remember { mutableStateOf(true) }
     var techLat by remember { mutableStateOf(0.0) }
     var techLng by remember { mutableStateOf(0.0) }
     var hasGps by remember { mutableStateOf(false) }
@@ -50,6 +58,11 @@ fun HomeTechnicianScreen(navController: NavController) {
     var selectedDistrictFilter by remember { mutableStateOf("Todos") }
 
     var techSpecialties by remember { mutableStateOf(listOf<String>()) }
+
+
+    // ViewModel para badge de notificaciones no leídas
+    val notificationsViewModel: NotificationsViewModel = viewModel()
+    val noLeidas by notificationsViewModel.noLeidas.collectAsState()
 
     // Launcher para pedir permiso de ubicación
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -161,8 +174,8 @@ fun HomeTechnicianScreen(navController: NavController) {
         }
     }
 
-    // Calcular distancia de cada solicitud al técnico
-    val requestsWithDistance = allRequests.map { request ->
+    // Calcula distancia solo sobre las solicitudes filtradas por especialidad
+    val requestsWithDistance = specialtyFilteredRequests.map { request ->
         val distance = if (techLat != 0.0 && techLng != 0.0 &&
             request.lat != 0.0 && request.lng != 0.0
         ) {
@@ -244,13 +257,32 @@ fun HomeTechnicianScreen(navController: NavController) {
                                 }
                             }
                         }
-                        IconButton(onClick = { navController.navigate(Routes.PROFILE) }) {
-                            Icon(
-                                Icons.Default.AccountCircle,
-                                contentDescription = "Perfil",
-                                tint = Primary,
-                                modifier = Modifier.size(36.dp)
-                            )
+// Íconos de notificaciones y perfil en el header
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            BadgedBox(
+                                badge = {
+                                    if (noLeidas > 0) {
+                                        Badge { Text(text = noLeidas.toString()) }
+                                    }
+                                }
+                            ) {
+                                IconButton(onClick = { navController.navigate(Routes.NOTIFICATIONS) }) {
+                                    Icon(
+                                        Icons.Default.Notifications,
+                                        contentDescription = "Notificaciones",
+                                        tint = Primary,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+                            IconButton(onClick = { navController.navigate(Routes.PROFILE) }) {
+                                Icon(
+                                    Icons.Default.AccountCircle,
+                                    contentDescription = "Perfil",
+                                    tint = Primary,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
                         }
                     }
                 }

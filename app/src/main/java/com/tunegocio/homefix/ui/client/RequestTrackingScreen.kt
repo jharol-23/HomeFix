@@ -27,6 +27,13 @@ import com.tunegocio.homefix.data.model.UserModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.theme.*
 
+
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import com.tunegocio.homefix.data.NotificationsRepository
+
+
+
 @Composable
 fun RequestTrackingScreen(
     navController: NavController,
@@ -35,7 +42,17 @@ fun RequestTrackingScreen(
     val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
 
+
     var request by remember { mutableStateOf<RequestModel?>(null) }
+
+
+    // Lista de técnicos interesados con sus datos
+    var tecnicosInteresados by remember { mutableStateOf<List<UserModel>>(emptyList()) }
+    var eligiendoTecnicoId by remember { mutableStateOf("") } // ID del técnico que se está procesando
+
+    val notificationsRepo = remember { NotificationsRepository() }
+
+
     var technician by remember { mutableStateOf<UserModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var showCancelDialog by remember { mutableStateOf(false) }
@@ -46,6 +63,26 @@ fun RequestTrackingScreen(
             .addSnapshotListener { snapshot, _ ->
                 isLoading = false
                 request = snapshot?.toObject(RequestModel::class.java)
+                // Cargar datos de cada técnico interesado
+                val interesados = snapshot?.get("interestedTechnicians") as? List<String> ?: emptyList()
+                if (interesados.isNotEmpty()) {
+                    val listaTemp = mutableListOf<UserModel>()
+                    var pendientes = interesados.size
+                    interesados.forEach { techId ->
+                        db.collection("users").document(techId).get()
+                            .addOnSuccessListener { doc ->
+                                doc.toObject(UserModel::class.java)?.let { listaTemp.add(it.copy(uid = techId)) }
+                                pendientes--
+                                if (pendientes == 0) tecnicosInteresados = listaTemp.toList()
+                            }
+                            .addOnFailureListener {
+                                pendientes--
+                                if (pendientes == 0) tecnicosInteresados = listaTemp.toList()
+                            }
+                    }
+                } else {
+                    tecnicosInteresados = emptyList()
+                }
 
                 // Cargar técnico si ya fue asignado
                 val techId = snapshot?.getString("technicianId") ?: ""
@@ -83,7 +120,43 @@ fun RequestTrackingScreen(
             context.startActivity(intent)
         } catch (e: Exception) { }
     }
-
+    fun elegirTecnico(tecnicoElegidoId: String) {
+        eligiendoTecnicoId = tecnicoElegidoId
+        db.collection("requests").document(requestId)
+            .update(
+                mapOf(
+                    "status" to "aceptada",
+                    "technicianId" to tecnicoElegidoId,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+            )
+            .addOnSuccessListener {
+                // Notificar al técnico elegido
+                notificationsRepo.crearNotificacion(
+                    userId = tecnicoElegidoId,
+                    titulo = "¡Te eligieron!",
+                    cuerpo = "El cliente eligió tu propuesta para ${request?.serviceType ?: ""}. Prepárate para ir.",
+                    tipo = "tecnico_elegido",
+                    requestId = requestId
+                )
+                // Notificar a los técnicos NO elegidos
+                tecnicosInteresados
+                    .filter { it.uid != tecnicoElegidoId }
+                    .forEach { tecnico ->
+                        notificationsRepo.crearNotificacion(
+                            userId = tecnico.uid,
+                            titulo = "Solicitud asignada a otro",
+                            cuerpo = "El cliente eligió a otro técnico para esta solicitud.",
+                            tipo = "tecnico_rechazado",
+                            requestId = requestId
+                        )
+                    }
+                eligiendoTecnicoId = ""
+            }
+            .addOnFailureListener {
+                eligiendoTecnicoId = ""
+            }
+    }
     // Diálogo de cancelación
     if (showCancelDialog) {
         AlertDialog(
@@ -173,6 +246,107 @@ fun RequestTrackingScreen(
             StatusProgressBar(status = req.status)
 
             Spacer(modifier = Modifier.height(20.dp))
+            // Sección técnicos interesados — solo cuando está pendiente y hay interesados
+            if (req.status == "pendiente" && tecnicosInteresados.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = "Técnicos interesados (${tecnicosInteresados.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                tecnicosInteresados.forEach { tecnico ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Avatar con inicial
+                                    Surface(
+                                        modifier = Modifier.size(48.dp),
+                                        shape = RoundedCornerShape(24.dp),
+                                        color = TechnicianColor.copy(alpha = 0.15f)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = tecnico.name.firstOrNull()?.toString()?.uppercase() ?: "T",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = TechnicianColor,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = tecnico.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = TextPrimary,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        if (tecnico.rating > 0) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Default.Star,
+                                                    contentDescription = null,
+                                                    tint = Warning,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text(
+                                                    text = "${"%.1f".format(tecnico.rating)}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = TextSecondary
+                                                )
+                                            }
+                                        }
+                                        if (tecnico.specialties.isNotEmpty()) {
+                                            Text(
+                                                text = tecnico.specialties.take(2).joinToString(", "),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            // Botón Elegir
+                            Button(
+                                onClick = { elegirTecnico(tecnico.uid) },
+                                enabled = eligiendoTecnicoId.isEmpty(),
+                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Success)
+                            ) {
+                                if (eligiendoTecnicoId == tecnico.uid) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(
+                                        text = "✓ Elegir este técnico",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
 
             // Detalle de la solicitud
             Text(
@@ -181,6 +355,7 @@ fun RequestTrackingScreen(
                 color = TextPrimary,
                 fontWeight = FontWeight.SemiBold
             )
+
             Spacer(modifier = Modifier.height(8.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),

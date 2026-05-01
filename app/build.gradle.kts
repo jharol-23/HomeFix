@@ -88,4 +88,7 @@ dependencies {
     implementation(libs.compose.icons.extended)
 
     implementation(libs.okhttp)
+
+
+    implementation(libs.osmdroid)
 }

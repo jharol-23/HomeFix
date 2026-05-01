@@ -1,5 +1,15 @@
 package com.tunegocio.homefix.ui.client
 
+
+
+
+
+
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.tunegocio.homefix.viewmodel.NotificationsViewModel
+
+
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -33,6 +43,10 @@ fun HomeClientScreen(navController: NavController) {
     var userName by remember { mutableStateOf("") }
     var requests by remember { mutableStateOf(listOf<RequestModel>()) }
     var isLoading by remember { mutableStateOf(true) }
+
+    // ViewModel para mostrar badge de notificaciones no leídas
+    val notificationsViewModel: NotificationsViewModel = viewModel()
+    val noLeidas by notificationsViewModel.noLeidas.collectAsState()
 
     // Cargar datos del usuario
     LaunchedEffect(uid) {
@@ -84,15 +98,34 @@ fun HomeClientScreen(navController: NavController) {
                             color = TextSecondary
                         )
                     }
-                    IconButton(
-                        onClick = { navController.navigate(Routes.PROFILE) }
-                    ) {
-                        Icon(
-                            Icons.Default.AccountCircle,
-                            contentDescription = "Perfil",
-                            tint = Primary,
-                            modifier = Modifier.size(36.dp)
-                        )
+// Íconos de notificaciones y perfil en el header
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Ícono notificaciones con badge de no leídas
+                        BadgedBox(
+                            badge = {
+                                if (noLeidas > 0) {
+                                    Badge { Text(text = noLeidas.toString()) }
+                                }
+                            }
+                        ) {
+                            IconButton(onClick = { navController.navigate(Routes.NOTIFICATIONS) }) {
+                                Icon(
+                                    Icons.Default.Notifications,
+                                    contentDescription = "Notificaciones",
+                                    tint = Primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                        // Ícono perfil
+                        IconButton(onClick = { navController.navigate(Routes.PROFILE) }) {
+                            Icon(
+                                Icons.Default.AccountCircle,
+                                contentDescription = "Perfil",
+                                tint = Primary,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
                     }
                 }
             }

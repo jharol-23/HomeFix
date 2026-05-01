@@ -22,6 +22,10 @@ object Routes {
     const val HISTORY = "history"
     const val RATING = "rating/{requestId}"
 
+    // Rutas compartidas — notificaciones y ajustes
+    const val NOTIFICATIONS = "notifications"
+    const val SETTINGS = "settings"
+
     // Funciones helper para rutas con parámetros
     fun requestTracking(requestId: String) = "request_tracking/$requestId"
     fun requestDetail(requestId: String) = "request_detail/$requestId"
