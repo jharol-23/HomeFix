@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.tunegocio.homefix.data.CloudinaryUploader
+import com.tunegocio.homefix.ui.auth.DialogoTerminos
 import com.tunegocio.homefix.data.CloudinaryConfig
 
 import com.tunegocio.homefix.data.ALL_SPECIALTIES
@@ -99,6 +100,13 @@ fun RegisterScreen(navController: NavController) {
     var selectedRole by remember { mutableStateOf("") }
     var selectedDistrict by remember { mutableStateOf("") }
     var showDistrictDialog by remember { mutableStateOf(false) }
+
+    // TERMINOS CONDICIONES Y MAYOR DE EDAD
+    var aceptoTerminos by remember { mutableStateOf(false) }
+    var esMayorDeEdad by remember { mutableStateOf(false) }
+    var mostrarTerminos by remember { mutableStateOf(false) }
+    var terminosError by remember { mutableStateOf("") }
+    var edadError by remember { mutableStateOf("") }
 
     // Selfie — ambos roles
     var selfieUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -276,6 +284,15 @@ fun RegisterScreen(navController: NavController) {
             }
         }
 
+        if (!aceptoTerminos) {
+            terminosError = "Debes aceptar los términos y condiciones"
+            hasError = true
+        }
+        if (!esMayorDeEdad) {
+            edadError = "Debes ser mayor de 18 años para registrarte"
+            hasError = true
+        }
+
         if (hasError) return
         isLoading = true
 
@@ -300,7 +317,19 @@ fun RegisterScreen(navController: NavController) {
                         whatsapp = phone.trim(),
                         createdAt = System.currentTimeMillis()
                     )
+
+
                     db.collection("users").document(uid).set(user)
+                        .addOnSuccessListener {
+                            // Enviar email de verificación
+                            result.user?.sendEmailVerification()
+                            isLoading = false
+                            // Ir a pantalla de verificación en lugar del Home
+                            navController.navigate(Routes.VERIFICAR_EMAIL) {
+                                popUpTo(Routes.REGISTER) { inclusive = true }
+                            }
+                        }
+                    /*db.collection("users").document(uid).set(user)
                         .addOnSuccessListener {
                             isLoading = false
                             if (selectedRole == "technician") {
@@ -312,7 +341,7 @@ fun RegisterScreen(navController: NavController) {
                                     popUpTo(Routes.REGISTER) { inclusive = true }
                                 }
                             }
-                        }
+                        }*/
                         .addOnFailureListener {
                             isLoading = false
                             errorMessage = "Error al guardar datos, intenta de nuevo"
@@ -810,6 +839,111 @@ fun RegisterScreen(navController: NavController) {
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+
+
+            // TÉRMINOS CONDICIONES Y MAYOR DE EDAD , VERIFICACION
+
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = CardBorder)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Diálogo de términos
+            if (mostrarTerminos) {
+                DialogoTerminos(
+                    onAceptar = {
+                        aceptoTerminos = true
+                        terminosError = ""
+                        mostrarTerminos = false
+                    },
+                    onCerrar = { mostrarTerminos = false }
+                )
+            }
+
+            // Checkbox — Términos y condiciones
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Checkbox(
+                    checked = aceptoTerminos,
+                    onCheckedChange = {
+                        aceptoTerminos = it
+                        if (it) terminosError = ""
+                    },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Primary,
+                        uncheckedColor = if (terminosError.isNotEmpty()) Error else TextSecondary
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    Row {
+                        Text(
+                            text = "He leído y acepto los ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Términos y Condiciones",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Primary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { mostrarTerminos = true }
+                        )
+                    }
+                    if (terminosError.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = terminosError,
+                            color = Error,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Checkbox — Mayor de edad
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Checkbox(
+                    checked = esMayorDeEdad,
+                    onCheckedChange = {
+                        esMayorDeEdad = it
+                        if (it) edadError = ""
+                    },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Primary,
+                        uncheckedColor = if (edadError.isNotEmpty()) Error else TextSecondary
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    Text(
+                        text = "Confirmo que soy mayor de 18 años",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextPrimary
+                    )
+                    if (edadError.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = edadError,
+                            color = Error,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+
+
+            // BOTON PARA CREAR CUENTA
 
             HomefixButton(
                 text = "Crear cuenta",

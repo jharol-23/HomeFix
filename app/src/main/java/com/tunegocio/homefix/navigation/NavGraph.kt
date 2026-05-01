@@ -22,6 +22,10 @@ object Routes {
     const val HISTORY = "history"
     const val RATING = "rating/{requestId}"
 
+
+    const val VERIFICAR_EMAIL = "verificar_email"
+    const val OLVIDE_CONTRASENA = "olvide_contrasena"
+
     // Funciones helper para rutas con parámetros
     fun requestTracking(requestId: String) = "request_tracking/$requestId"
     fun requestDetail(requestId: String) = "request_detail/$requestId"

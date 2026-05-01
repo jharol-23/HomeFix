@@ -25,6 +25,9 @@ import com.tunegocio.homefix.ui.shared.RatingScreen
 import com.tunegocio.homefix.ui.shared.HistoryScreen
 import com.tunegocio.homefix.ui.technician.EarningsScreen
 
+import com.tunegocio.homefix.ui.auth.VerificarEmailScreen
+import com.tunegocio.homefix.ui.auth.OlvideContrasenaScreen
+
 
 @Composable
 fun AppNavigation(
@@ -111,6 +114,15 @@ fun AppNavigation(
 
         composable(Routes.EARNINGS) {
             EarningsScreen(navController = navController)
+        }
+
+        // VERFICAR EN EL CORREO Y RECUPERACION DE CONTRASENA
+
+        composable(Routes.VERIFICAR_EMAIL) {
+            VerificarEmailScreen(navController = navController)
+        }
+        composable(Routes.OLVIDE_CONTRASENA) {
+            OlvideContrasenaScreen(navController = navController)
         }
 
 

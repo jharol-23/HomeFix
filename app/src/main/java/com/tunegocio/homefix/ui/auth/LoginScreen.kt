@@ -58,8 +58,8 @@ fun LoginScreen(navController: NavController) {
         if (password.isBlank()) {
             passwordError = "La contraseña es obligatoria"
             hasError = true
-        } else if (password.length < 6) {
-            passwordError = "Mínimo 6 caracteres"
+        } else if (password.length < 8) {
+            passwordError = "Mínimo 8 caracteres"
             hasError = true
         }
 
@@ -70,6 +70,15 @@ fun LoginScreen(navController: NavController) {
         auth.signInWithEmailAndPassword(email.trim(), password)
             .addOnSuccessListener { result ->
                 val uid = result.user?.uid ?: return@addOnSuccessListener
+
+                // Verificar si el email está confirmado
+                if (result.user?.isEmailVerified == false) {
+                    isLoading = false
+                    generalError = "Debes verificar tu email antes de ingresar"
+                    auth.signOut()
+                    return@addOnSuccessListener
+                }
+
                 db.collection("users").document(uid).get()
                     .addOnSuccessListener { doc ->
                         isLoading = false
@@ -183,7 +192,27 @@ fun LoginScreen(navController: NavController) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+
+            // Después del campo de contraseña y antes del botón de login:
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = {
+                        navController.navigate(Routes.OLVIDE_CONTRASENA)
+                    }
+                ) {
+                    Text(
+                        text = "¿Olvidaste tu contraseña?",
+                        color = Primary,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
 
             HomefixButton(
                 text = "Iniciar sesión",
