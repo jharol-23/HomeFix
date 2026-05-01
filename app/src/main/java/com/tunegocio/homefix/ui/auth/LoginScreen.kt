@@ -32,20 +32,17 @@ fun LoginScreen(navController: NavController) {
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
 
-    // Errores por campo
     var emailError by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf("") }
     var generalError by remember { mutableStateOf("") }
 
     fun login() {
-        // Limpiar errores anteriores
         emailError = ""
         passwordError = ""
         generalError = ""
 
         var hasError = false
 
-        // Validar email
         if (email.isBlank()) {
             emailError = "El correo es obligatorio"
             hasError = true
@@ -54,12 +51,11 @@ fun LoginScreen(navController: NavController) {
             hasError = true
         }
 
-        // Validar contraseña
         if (password.isBlank()) {
             passwordError = "La contraseña es obligatoria"
             hasError = true
-        } else if (password.length < 6) {
-            passwordError = "Mínimo 6 caracteres"
+        } else if (password.length < 8) {
+            passwordError = "Mínimo 8 caracteres"
             hasError = true
         }
 
@@ -70,6 +66,15 @@ fun LoginScreen(navController: NavController) {
         auth.signInWithEmailAndPassword(email.trim(), password)
             .addOnSuccessListener { result ->
                 val uid = result.user?.uid ?: return@addOnSuccessListener
+
+                // Verificar email confirmado antes de dejar entrar
+                if (result.user?.isEmailVerified == false) {
+                    isLoading = false
+                    generalError = "Debes verificar tu email antes de ingresar"
+                    auth.signOut()
+                    return@addOnSuccessListener
+                }
+
                 db.collection("users").document(uid).get()
                     .addOnSuccessListener { doc ->
                         isLoading = false
@@ -137,7 +142,6 @@ fun LoginScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Email
             HomefixTextField(
                 value = email,
                 onValueChange = {
@@ -151,7 +155,6 @@ fun LoginScreen(navController: NavController) {
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Contraseña
             HomefixTextField(
                 value = password,
                 onValueChange = {
@@ -164,7 +167,6 @@ fun LoginScreen(navController: NavController) {
                 errorMessage = passwordError
             )
 
-            // Error general (bloqueado, sin internet, etc)
             if (generalError.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
@@ -183,7 +185,25 @@ fun LoginScreen(navController: NavController) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            // Botón "¿Olvidaste tu contraseña?"
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = { navController.navigate(Routes.OLVIDE_CONTRASENA) }
+                ) {
+                    Text(
+                        text = "¿Olvidaste tu contraseña?",
+                        color = Primary,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             HomefixButton(
                 text = "Iniciar sesión",

@@ -2,6 +2,7 @@ package com.tunegocio.homefix.ui.client
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,7 +16,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -24,6 +28,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.tunegocio.homefix.data.model.UserModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.theme.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.URL
 
 @Composable
 fun TechnicianListScreen(navController: NavController) {
@@ -36,8 +43,24 @@ fun TechnicianListScreen(navController: NavController) {
     var isLoading by remember { mutableStateOf(true) }
     var selectedFilter by remember { mutableStateOf("Todos") }
     var searchQuery by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    var selectedTechnicianUid by remember { mutableStateOf<String?>(null) }
 
-    val filters = listOf("Todos", "Electricidad", "Gasfitería", "Carpintería", "Pintura", "Albañilería")
+    // Lista completa de filtros (Archivo 4)
+    val filters = listOf(
+        "Todos",
+        "Electricidad",
+        "Gasfitería",
+        "Pintura",
+        "Carpintería",
+        "Vidriería",
+        "Jardinería",
+        "Cerrajería",
+        "Albañilería",
+        "Muebles a medida",
+        "Lavado de tapizados",
+        "Mudanzas"
+    )
 
     LaunchedEffect(Unit) {
         db.collection("users")
@@ -52,7 +75,6 @@ fun TechnicianListScreen(navController: NavController) {
             }
     }
 
-    // Filtrar cuando cambia el filtro o búsqueda
     LaunchedEffect(selectedFilter, searchQuery, technicians) {
         filteredTechnicians = technicians.filter { tech ->
             val matchesFilter = selectedFilter == "Todos" ||
@@ -72,9 +94,7 @@ fun TechnicianListScreen(navController: NavController) {
         val intent = Intent(Intent.ACTION_VIEW, uri)
         try {
             context.startActivity(intent)
-        } catch (e: Exception) {
-            // WhatsApp no instalado
-        }
+        } catch (e: Exception) { }
     }
 
     Scaffold(
@@ -88,7 +108,7 @@ fun TechnicianListScreen(navController: NavController) {
                 .background(Background)
                 .padding(padding)
         ) {
-            // Header
+            // Header + buscador
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(
@@ -112,8 +132,6 @@ fun TechnicianListScreen(navController: NavController) {
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
-
-                // Buscador
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -141,20 +159,18 @@ fun TechnicianListScreen(navController: NavController) {
                 Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Filtros horizontales
+            // Filtros: chips horizontales (Archivo 3) + dropdown completo (Archivo 4)
+            // Se mantienen los chips para acceso rápido y el dropdown para la lista completa
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filters) { filter ->
+                items(filters.take(6)) { filter ->
                     FilterChip(
                         selected = selectedFilter == filter,
                         onClick = { selectedFilter = filter },
                         label = {
-                            Text(
-                                filter,
-                                style = MaterialTheme.typography.labelMedium
-                            )
+                            Text(filter, style = MaterialTheme.typography.labelMedium)
                         },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Primary,
@@ -164,9 +180,80 @@ fun TechnicianListScreen(navController: NavController) {
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Dropdown para ver todas las especialidades
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+            ) {
+                OutlinedTextField(
+                    value = if (selectedFilter == "Todos") "Todas las especialidades" else selectedFilter,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Filtrar por especialidad") },
+                    trailingIcon = {
+                        IconButton(onClick = { expanded = !expanded }) {
+                            Icon(
+                                imageVector = if (expanded)
+                                    Icons.Default.KeyboardArrowUp
+                                else
+                                    Icons.Default.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = Primary
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { expanded = !expanded },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Primary,
+                        unfocusedBorderColor = CardBorder
+                    )
+                )
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .background(CardBackground)
+                ) {
+                    filters.forEach { filter ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = filter,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (selectedFilter == filter) Primary else TextPrimary,
+                                    fontWeight = if (selectedFilter == filter)
+                                        FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            onClick = {
+                                selectedFilter = filter
+                                expanded = false
+                            },
+                            leadingIcon = {
+                                if (selectedFilter == filter) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = Primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Lista de técnicos
+            // Contenido principal
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -201,10 +288,7 @@ fun TechnicianListScreen(navController: NavController) {
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(
-                        horizontal = 20.dp,
-                        vertical = 8.dp
-                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
@@ -217,6 +301,11 @@ fun TechnicianListScreen(navController: NavController) {
                     items(filteredTechnicians) { tech ->
                         TechnicianCard(
                             technician = tech,
+                            isSelected = selectedTechnicianUid == tech.uid,
+                            onCardClick = {
+                                selectedTechnicianUid =
+                                    if (selectedTechnicianUid == tech.uid) null else tech.uid
+                            },
                             onWhatsAppClick = { openWhatsApp(tech.whatsapp, tech.name) }
                         )
                     }
@@ -227,13 +316,39 @@ fun TechnicianListScreen(navController: NavController) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Componente TechnicianCard unificado
+// ─────────────────────────────────────────────────────────────
+
 @Composable
 fun TechnicianCard(
     technician: UserModel,
+    isSelected: Boolean = false,
+    onCardClick: () -> Unit = {},
     onWhatsAppClick: () -> Unit
 ) {
+    // Carga de foto de perfil (selfieUrl) - Archivo 4
+    var imageBitmap by remember(technician.selfieUrl) {
+        mutableStateOf<android.graphics.Bitmap?>(null)
+    }
+
+    LaunchedEffect(technician.selfieUrl) {
+        if (technician.selfieUrl.isNotBlank()) {
+            imageBitmap = try {
+                withContext(Dispatchers.IO) {
+                    val url = URL(technician.selfieUrl)
+                    android.graphics.BitmapFactory.decodeStream(url.openStream())
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCardClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -243,20 +358,31 @@ fun TechnicianCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
             ) {
-                // Avatar con inicial
+                // Avatar: foto real si existe, inicial si no
                 Surface(
                     modifier = Modifier.size(52.dp),
                     shape = RoundedCornerShape(26.dp),
                     color = TechnicianColor.copy(alpha = 0.15f)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = technician.name.firstOrNull()
-                                ?.toString()?.uppercase() ?: "T",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = TechnicianColor,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (imageBitmap != null) {
+                            Image(
+                                bitmap = imageBitmap!!.asImageBitmap(),
+                                contentDescription = "Foto del técnico",
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(RoundedCornerShape(26.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Text(
+                                text = technician.name.firstOrNull()
+                                    ?.toString()?.uppercase() ?: "T",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = TechnicianColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
@@ -269,7 +395,6 @@ fun TechnicianCard(
                         color = TextPrimary,
                         fontWeight = FontWeight.SemiBold
                     )
-                    // Calificación
                     if (technician.rating > 0) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -294,7 +419,6 @@ fun TechnicianCard(
                             color = TextHint
                         )
                     }
-                    // Años de experiencia
                     if (technician.yearsExp > 0) {
                         Text(
                             text = "${technician.yearsExp} años de experiencia",
@@ -304,7 +428,7 @@ fun TechnicianCard(
                     }
                 }
 
-                // Indicador activo
+                // Badge activo
                 Surface(
                     shape = RoundedCornerShape(99.dp),
                     color = Success.copy(alpha = 0.15f)
@@ -317,17 +441,6 @@ fun TechnicianCard(
                         fontWeight = FontWeight.Medium
                     )
                 }
-            }
-
-            // Bio si tiene
-            if (technician.bio.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = technician.bio,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                    maxLines = 2
-                )
             }
 
             // Especialidades
@@ -344,10 +457,7 @@ fun TechnicianCard(
                         ) {
                             Text(
                                 text = specialty,
-                                modifier = Modifier.padding(
-                                    horizontal = 8.dp,
-                                    vertical = 3.dp
-                                ),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TechnicianColor
                             )
@@ -360,15 +470,29 @@ fun TechnicianCard(
                         ) {
                             Text(
                                 text = "+${technician.specialties.size - 3}",
-                                modifier = Modifier.padding(
-                                    horizontal = 8.dp,
-                                    vertical = 3.dp
-                                ),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary
                             )
                         }
                     }
+                }
+            }
+
+            // Bio expandible al tocar la card (Archivo 4)
+            if (isSelected && technician.bio.isNotBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceVariant
+                ) {
+                    Text(
+                        text = technician.bio,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
             }
 
@@ -379,11 +503,11 @@ fun TechnicianCard(
             // Botón WhatsApp
             Button(
                 onClick = onWhatsAppClick,
-                modifier = Modifier.fillMaxWidth().height(44.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
                 shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = WhatsAppGreen
-                )
+                colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen)
             ) {
                 Icon(
                     Icons.Default.Phone,

@@ -22,17 +22,11 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.firestore.FirebaseFirestore
+import com.tunegocio.homefix.data.NotificationsRepository
 import com.tunegocio.homefix.data.model.RequestModel
 import com.tunegocio.homefix.data.model.UserModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.theme.*
-
-
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import com.tunegocio.homefix.data.NotificationsRepository
-
-
 
 @Composable
 fun RequestTrackingScreen(
@@ -42,16 +36,13 @@ fun RequestTrackingScreen(
     val db = FirebaseFirestore.getInstance()
     val context = LocalContext.current
 
-
     var request by remember { mutableStateOf<RequestModel?>(null) }
-
 
     // Lista de técnicos interesados con sus datos
     var tecnicosInteresados by remember { mutableStateOf<List<UserModel>>(emptyList()) }
-    var eligiendoTecnicoId by remember { mutableStateOf("") } // ID del técnico que se está procesando
+    var eligiendoTecnicoId by remember { mutableStateOf("") }
 
     val notificationsRepo = remember { NotificationsRepository() }
-
 
     var technician by remember { mutableStateOf<UserModel?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -63,6 +54,7 @@ fun RequestTrackingScreen(
             .addSnapshotListener { snapshot, _ ->
                 isLoading = false
                 request = snapshot?.toObject(RequestModel::class.java)
+
                 // Cargar datos de cada técnico interesado
                 val interesados = snapshot?.get("interestedTechnicians") as? List<String> ?: emptyList()
                 if (interesados.isNotEmpty()) {
@@ -71,7 +63,9 @@ fun RequestTrackingScreen(
                     interesados.forEach { techId ->
                         db.collection("users").document(techId).get()
                             .addOnSuccessListener { doc ->
-                                doc.toObject(UserModel::class.java)?.let { listaTemp.add(it.copy(uid = techId)) }
+                                doc.toObject(UserModel::class.java)?.let {
+                                    listaTemp.add(it.copy(uid = techId))
+                                }
                                 pendientes--
                                 if (pendientes == 0) tecnicosInteresados = listaTemp.toList()
                             }
@@ -120,6 +114,7 @@ fun RequestTrackingScreen(
             context.startActivity(intent)
         } catch (e: Exception) { }
     }
+
     fun elegirTecnico(tecnicoElegidoId: String) {
         eligiendoTecnicoId = tecnicoElegidoId
         db.collection("requests").document(requestId)
@@ -157,6 +152,7 @@ fun RequestTrackingScreen(
                 eligiendoTecnicoId = ""
             }
     }
+
     // Diálogo de cancelación
     if (showCancelDialog) {
         AlertDialog(
@@ -185,7 +181,9 @@ fun RequestTrackingScreen(
 
     if (isLoading) {
         Box(
-            modifier = Modifier.fillMaxSize().background(Background),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(color = Primary)
@@ -245,7 +243,6 @@ fun RequestTrackingScreen(
             // Barra de progreso de estados
             StatusProgressBar(status = req.status)
 
-            Spacer(modifier = Modifier.height(20.dp))
             // Sección técnicos interesados — solo cuando está pendiente y hay interesados
             if (req.status == "pendiente" && tecnicosInteresados.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(20.dp))
@@ -278,7 +275,8 @@ fun RequestTrackingScreen(
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Text(
-                                                text = tecnico.name.firstOrNull()?.toString()?.uppercase() ?: "T",
+                                                text = tecnico.name
+                                                    .firstOrNull()?.toString()?.uppercase() ?: "T",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 color = TechnicianColor,
                                                 fontWeight = FontWeight.Bold
@@ -324,7 +322,9 @@ fun RequestTrackingScreen(
                             Button(
                                 onClick = { elegirTecnico(tecnico.uid) },
                                 enabled = eligiendoTecnicoId.isEmpty(),
-                                modifier = Modifier.fillMaxWidth().height(44.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Success)
                             ) {
@@ -349,13 +349,13 @@ fun RequestTrackingScreen(
             }
 
             // Detalle de la solicitud
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Detalle",
                 style = MaterialTheme.typography.titleMedium,
                 color = TextPrimary,
                 fontWeight = FontWeight.SemiBold
             )
-
             Spacer(modifier = Modifier.height(8.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -374,10 +374,7 @@ fun RequestTrackingScreen(
                         ) {
                             Text(
                                 text = req.serviceType,
-                                modifier = Modifier.padding(
-                                    horizontal = 10.dp,
-                                    vertical = 5.dp
-                                ),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = Primary,
                                 fontWeight = FontWeight.SemiBold
@@ -390,10 +387,7 @@ fun RequestTrackingScreen(
                             ) {
                                 Text(
                                     text = "⚡ Urgente",
-                                    modifier = Modifier.padding(
-                                        horizontal = 10.dp,
-                                        vertical = 5.dp
-                                    ),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                     style = MaterialTheme.typography.labelLarge,
                                     color = Error
                                 )
@@ -470,8 +464,7 @@ fun RequestTrackingScreen(
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(
                                             text = technician!!.name
-                                                .firstOrNull()?.toString()
-                                                ?.uppercase() ?: "T",
+                                                .firstOrNull()?.toString()?.uppercase() ?: "T",
                                             style = MaterialTheme.typography.titleMedium,
                                             color = TechnicianColor,
                                             fontWeight = FontWeight.Bold
@@ -487,9 +480,7 @@ fun RequestTrackingScreen(
                                         fontWeight = FontWeight.Medium
                                     )
                                     if (technician!!.rating > 0) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
                                                 Icons.Default.Star,
                                                 contentDescription = null,
@@ -506,7 +497,8 @@ fun RequestTrackingScreen(
                                     }
                                     if (technician!!.specialties.isNotEmpty()) {
                                         Text(
-                                            text = technician!!.specialties.take(2).joinToString(", "),
+                                            text = technician!!.specialties.take(2)
+                                                .joinToString(", "),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = TextSecondary
                                         )
@@ -514,7 +506,6 @@ fun RequestTrackingScreen(
                                 }
                             }
                         }
-
                         // Botón WhatsApp al técnico
                         if (technician!!.whatsapp.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(12.dp))
@@ -524,9 +515,7 @@ fun RequestTrackingScreen(
                                     .fillMaxWidth()
                                     .height(44.dp),
                                 shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = WhatsAppGreen
-                                )
+                                colors = ButtonDefaults.buttonColors(containerColor = WhatsAppGreen)
                             ) {
                                 Icon(
                                     Icons.Default.Phone,
@@ -583,7 +572,9 @@ fun RequestTrackingScreen(
                             onClick = {
                                 navController.navigate(Routes.rating(requestId))
                             },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Primary)
                         ) {
@@ -609,14 +600,18 @@ fun RequestTrackingScreen(
     }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Componentes auxiliares
+// ─────────────────────────────────────────────────────────────
+
 @Composable
 fun StatusProgressBar(status: String) {
     val steps = listOf(
-        "pendiente" to "Pendiente",
+        "pendiente"   to "Pendiente",
         "en_revision" to "En revisión",
-        "aceptada" to "Aceptada",
-        "en_camino" to "En camino",
-        "completada" to "Completada"
+        "aceptada"    to "Aceptada",
+        "en_camino"   to "En camino",
+        "completada"  to "Completada"
     )
 
     val currentIndex = steps.indexOfFirst { it.first == status }
@@ -638,26 +633,22 @@ fun StatusProgressBar(status: String) {
             Spacer(modifier = Modifier.height(16.dp))
 
             steps.forEachIndexed { index, (_, label) ->
-                val isDone = index < currentIndex
+                val isDone    = index < currentIndex
                 val isCurrent = index == currentIndex
-                val isPending = index > currentIndex
 
                 Row(
                     verticalAlignment = Alignment.Top,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     // Línea vertical + círculo
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Círculo del paso
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Surface(
                             modifier = Modifier.size(24.dp),
                             shape = RoundedCornerShape(12.dp),
                             color = when {
-                                isDone -> Success
+                                isDone    -> Success
                                 isCurrent -> Primary
-                                else -> SurfaceVariant
+                                else      -> SurfaceVariant
                             }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -700,9 +691,9 @@ fun StatusProgressBar(status: String) {
                             text = label,
                             style = MaterialTheme.typography.bodyMedium,
                             color = when {
-                                isDone -> Success
+                                isDone    -> Success
                                 isCurrent -> Primary
-                                else -> TextSecondary
+                                else      -> TextSecondary
                             },
                             fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal
                         )
@@ -723,14 +714,12 @@ fun StatusProgressBar(status: String) {
     }
 }
 
-fun getStatusDescription(status: String): String {
-    return when (status) {
-        "pendiente" -> "Esperando que un técnico acepte..."
-        "en_revision" -> "Un técnico está evaluando tu solicitud"
-        "aceptada" -> "¡Un técnico aceptó tu solicitud!"
-        "en_camino" -> "El técnico está en camino a tu ubicación"
-        "completada" -> "El servicio fue completado exitosamente"
-        "cancelada" -> "La solicitud fue cancelada"
-        else -> ""
-    }
+fun getStatusDescription(status: String): String = when (status) {
+    "pendiente"   -> "Esperando que un técnico acepte..."
+    "en_revision" -> "Un técnico está evaluando tu solicitud"
+    "aceptada"    -> "¡Un técnico aceptó tu solicitud!"
+    "en_camino"   -> "El técnico está en camino a tu ubicación"
+    "completada"  -> "El servicio fue completado exitosamente"
+    "cancelada"   -> "La solicitud fue cancelada"
+    else          -> ""
 }

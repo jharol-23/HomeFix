@@ -1,10 +1,8 @@
 package com.tunegocio.homefix.ui.client
 
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import android.Manifest
 import android.annotation.SuppressLint
+import android.location.Geocoder
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -29,6 +29,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -37,54 +38,41 @@ import coil.compose.AsyncImage
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.tunegocio.homefix.data.ALL_SPECIALTIES
+import com.tunegocio.homefix.data.CloudinaryUploader
 import com.tunegocio.homefix.data.model.RequestModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.components.HomefixButton
 import com.tunegocio.homefix.ui.components.HomefixTextField
+import com.tunegocio.homefix.ui.components.MapaUbicacion
+import com.tunegocio.homefix.ui.components.estaDentroDeLima
 import com.tunegocio.homefix.ui.theme.*
-import java.io.File
-import java.util.UUID
-import android.location.Geocoder
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.ImeAction
-import java.util.*
-import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import com.tunegocio.homefix.data.CloudinaryUploader
-import androidx.compose.material.icons.filled.PhotoCamera
-import com.tunegocio.homefix.data.ALL_SPECIALTIES
-import com.tunegocio.homefix.ui.components.MapaUbicacion
-import com.tunegocio.homefix.ui.components.estaDentroDeLima
-
-
-
-
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import java.io.File
 import java.net.URL
 import java.net.URLEncoder
-
-
+import java.util.*
 
 // Ícono emoji por especialidad
 private fun iconoPorEspecialidad(especialidad: String): String {
     return when (especialidad) {
-        "Electricidad"       -> "⚡"
-        "Gasfitería"         -> "🔧"
-        "Pintura"            -> "🎨"
-        "Carpintería"        -> "🪚"
-        "Vidriería"          -> "🪟"
-        "Jardinería"         -> "🌿"
-        "Cerrajería"         -> "🔑"
-        "Albañilería"        -> "🧱"
-        "Muebles a medida"   -> "🛋️"
-        "Lavado de tapizados"-> "🧹"
-        "Mudanzas"           -> "📦"
-        else                 -> "🔨"
+        "Electricidad"        -> "⚡"
+        "Gasfitería"          -> "🔧"
+        "Pintura"             -> "🎨"
+        "Carpintería"         -> "🪚"
+        "Vidriería"           -> "🪟"
+        "Jardinería"          -> "🌿"
+        "Cerrajería"          -> "🔑"
+        "Albañilería"         -> "🧱"
+        "Muebles a medida"    -> "🛋️"
+        "Lavado de tapizados" -> "🧹"
+        "Mudanzas"            -> "📦"
+        else                  -> "🔨"
     }
 }
 
@@ -99,10 +87,10 @@ fun NewRequestScreen(navController: NavController) {
     val uid = auth.currentUser?.uid ?: ""
     val scope = rememberCoroutineScope()
 
-    // Repositorio para crear notificaciones
+    // Repositorio para crear notificaciones a técnicos
     val notificationsRepo = remember { com.tunegocio.homefix.data.NotificationsRepository() }
 
-    // Detecta si la pantalla es pequeña — responsive
+    // Detecta si la pantalla es ancha — diseño responsive
     val configuracion = LocalConfiguration.current
     val pantallaAncha = configuracion.screenWidthDp >= 360
 
@@ -128,6 +116,7 @@ fun NewRequestScreen(navController: NavController) {
 
     val serviceTypes = ALL_SPECIALTIES
 
+    // Archivo temporal para la foto de cámara
     val photoFile = remember { File(context.cacheDir, "photo_${UUID.randomUUID()}.jpg") }
     val photoUriForCamera = remember {
         FileProvider.getUriForFile(context, "${context.packageName}.provider", photoFile)
@@ -145,6 +134,7 @@ fun NewRequestScreen(navController: NavController) {
         ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) cameraLauncher.launch(photoUriForCamera) }
 
+    // Convierte coordenadas a dirección legible con Geocoder
     fun actualizarDireccion(latitude: Double, longitude: Double) {
         try {
             val geocoder = Geocoder(context, Locale("es", "PE"))
@@ -161,7 +151,7 @@ fun NewRequestScreen(navController: NavController) {
         }
     }
 
-    // Busca sugerencias mientras el usuario escribe — espera 400ms antes de buscar
+    // Busca sugerencias mientras el usuario escribe — espera 400ms (debounce)
     fun buscarSugerencias(query: String) {
         jobBusqueda?.cancel()
         if (query.length < 3) {
@@ -170,13 +160,12 @@ fun NewRequestScreen(navController: NavController) {
             return
         }
         jobBusqueda = scope.launch {
-            delay(400) // Debounce — no busca en cada letra
+            delay(400)
             try {
                 val textoCodificado = URLEncoder.encode("$query, Lima, Peru", "UTF-8")
                 val url = "https://nominatim.openstreetmap.org/search?q=$textoCodificado&format=json&limit=8&countrycodes=pe&accept-language=es"
                 val respuesta = withContext(Dispatchers.IO) {
                     URL(url).openConnection().apply {
-                        // Nominatim requiere un User-Agent válido
                         setRequestProperty("User-Agent", "HomeFix-App/1.0")
                         connectTimeout = 5000
                         readTimeout = 5000
@@ -188,14 +177,12 @@ fun NewRequestScreen(navController: NavController) {
                     val item = json.getJSONObject(i)
                     val latItem = item.getDouble("lat")
                     val lngItem = item.getDouble("lon")
-                    // Filtra solo resultados dentro de Lima
+                    // Solo resultados dentro de Lima
                     if (estaDentroDeLima(latItem, lngItem)) {
                         val direccion = android.location.Address(Locale("es", "PE")).apply {
                             latitude = latItem
                             longitude = lngItem
-                            // nombre del lugar
                             featureName = item.optString("display_name").split(",").firstOrNull()?.trim() ?: ""
-                            // dirección completa
                             setAddressLine(0, item.optString("display_name"))
                         }
                         resultadosNominatim.add(direccion)
@@ -204,7 +191,7 @@ fun NewRequestScreen(navController: NavController) {
                 sugerencias = resultadosNominatim
                 mostrarSugerencias = sugerencias.isNotEmpty()
             } catch (e: Exception) {
-                // Si Nominatim falla, intenta con Geocoder como respaldo
+                // Fallback: Geocoder si Nominatim falla
                 try {
                     val geocoder = Geocoder(context, Locale("es", "PE"))
                     @Suppress("DEPRECATION")
@@ -219,7 +206,7 @@ fun NewRequestScreen(navController: NavController) {
         }
     }
 
-    // Cuando el usuario toca una sugerencia
+    // Cuando el usuario selecciona una sugerencia del buscador
     fun seleccionarSugerencia(resultado: android.location.Address) {
         lat = resultado.latitude
         lng = resultado.longitude
@@ -237,13 +224,12 @@ fun NewRequestScreen(navController: NavController) {
     ) { permissions ->
         if (permissions.values.any { it }) {
             val fusedLocation = LocationServices.getFusedLocationProviderClient(context)
-
-            // Usa LocationCallback — más confiable que getCurrentLocation en todos los dispositivos
+            // LocationCallback — más confiable que lastLocation en todos los dispositivos
             val locationRequest = com.google.android.gms.location.LocationRequest.Builder(
                 com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
                 1000L
             )
-                .setMaxUpdates(1) // Solo una lectura
+                .setMaxUpdates(1)
                 .setWaitForAccurateLocation(true)
                 .build()
 
@@ -266,24 +252,15 @@ fun NewRequestScreen(navController: NavController) {
         }
     }
 
+    // Carga el distrito del cliente y solicita permisos de ubicación al abrir
     LaunchedEffect(Unit) {
         db.collection("users").document(uid).get()
             .addOnSuccessListener { doc -> clientDistrict = doc.getString("district") ?: "" }
-
-        // Pide permisos — si ya los tiene, el launcher los recibe directo
         locationPermissionLauncher.launch(
             arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_COARSE_LOCATION
             )
-        )
-    }
-
-    LaunchedEffect(Unit) {
-        db.collection("users").document(uid).get()
-            .addOnSuccessListener { doc -> clientDistrict = doc.getString("district") ?: "" }
-        locationPermissionLauncher.launch(
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
     }
 
@@ -315,7 +292,7 @@ fun NewRequestScreen(navController: NavController) {
             )
             db.collection("requests").document(requestId).set(request)
                 .addOnSuccessListener {
-                    // Busca técnicos con la especialidad solicitada y les notifica
+                    // Notifica a técnicos con la especialidad solicitada
                     db.collection("users")
                         .whereEqualTo("role", "technician")
                         .whereArrayContains("specialties", serviceType)
@@ -337,15 +314,21 @@ fun NewRequestScreen(navController: NavController) {
                         popUpTo(Routes.NEW_REQUEST) { inclusive = true }
                     }
                 }
+                .addOnFailureListener {
+                    isLoading = false
+                    errorMessage = "Error al publicar la solicitud"
+                }
         }
-
 
         if (photoUri != null) {
             scope.launch {
                 val result = CloudinaryUploader.uploadImage(
                     context = context, uri = photoUri!!, folder = "homefix/requests"
                 )
-                result.fold(onSuccess = { url -> saveRequest(url) }, onFailure = { saveRequest("") })
+                result.fold(
+                    onSuccess = { url -> saveRequest(url) },
+                    onFailure = { saveRequest("") }
+                )
             }
         } else {
             saveRequest("")
@@ -361,7 +344,10 @@ fun NewRequestScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = if (pantallaAncha) 20.dp else 14.dp, vertical = 20.dp)
+                .padding(
+                    horizontal = if (pantallaAncha) 20.dp else 14.dp,
+                    vertical = 20.dp
+                )
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -382,7 +368,7 @@ fun NewRequestScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Tipo de servicio — dropdown mejorado visualmente ──
+            // ── Tipo de servicio — dropdown con íconos emoji ──
             Text(
                 text = "Tipo de servicio",
                 style = MaterialTheme.typography.titleMedium,
@@ -394,7 +380,6 @@ fun NewRequestScreen(navController: NavController) {
                 expanded = dropdownExpandido,
                 onExpandedChange = { dropdownExpandido = !dropdownExpandido }
             ) {
-                // Campo que muestra el servicio seleccionado o el placeholder
                 OutlinedTextField(
                     value = if (serviceType.isEmpty()) "" else "${iconoPorEspecialidad(serviceType)}  $serviceType",
                     onValueChange = {},
@@ -433,7 +418,6 @@ fun NewRequestScreen(navController: NavController) {
                         DropdownMenuItem(
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Ícono emoji de la especialidad
                                     Text(
                                         text = iconoPorEspecialidad(tipo),
                                         fontSize = 18.sp,
@@ -507,7 +491,7 @@ fun NewRequestScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // ── Foto del problema ──
+            // ── Foto del problema (opcional) ──
             Text(
                 text = "Foto del problema (opcional)",
                 style = MaterialTheme.typography.titleMedium,
@@ -577,7 +561,7 @@ fun NewRequestScreen(navController: NavController) {
                     value = busqueda,
                     onValueChange = { texto ->
                         busqueda = texto
-                        buscarSugerencias(texto) // Dispara búsqueda con debounce
+                        buscarSugerencias(texto)
                     },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
@@ -614,7 +598,7 @@ fun NewRequestScreen(navController: NavController) {
                 )
             }
 
-            // Lista de sugerencias — aparece debajo del buscador
+            // Lista de sugerencias — aparece debajo del buscador con animación
             AnimatedVisibility(
                 visible = mostrarSugerencias,
                 enter = fadeIn(),
@@ -645,7 +629,6 @@ fun NewRequestScreen(navController: NavController) {
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
-                                    // Primera línea — nombre del lugar
                                     Text(
                                         text = resultado.featureName ?: resultado.getAddressLine(0) ?: "",
                                         style = MaterialTheme.typography.bodyMedium,
@@ -654,7 +637,6 @@ fun NewRequestScreen(navController: NavController) {
                                         fontSize = if (pantallaAncha) 14.sp else 12.sp,
                                         maxLines = 1
                                     )
-                                    // Segunda línea — dirección completa
                                     Text(
                                         text = resultado.getAddressLine(0) ?: "",
                                         style = MaterialTheme.typography.bodySmall,
@@ -664,7 +646,6 @@ fun NewRequestScreen(navController: NavController) {
                                     )
                                 }
                             }
-                            // Divisor entre sugerencias excepto el último
                             if (index < sugerencias.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -678,7 +659,7 @@ fun NewRequestScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Mapa OSMDroid
+            // Mapa interactivo OSMDroid
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -688,7 +669,8 @@ fun NewRequestScreen(navController: NavController) {
                     lat = lat,
                     lng = lng,
                     onUbicacionSeleccionada = { nuevoLat, nuevoLng ->
-                        val cambioSignificativo = Math.abs(lat - nuevoLat) > 0.0001 || Math.abs(lng - nuevoLng) > 0.0001
+                        val cambioSignificativo =
+                            Math.abs(lat - nuevoLat) > 0.0001 || Math.abs(lng - nuevoLng) > 0.0001
                         if (cambioSignificativo) {
                             lat = nuevoLat
                             lng = nuevoLng
@@ -702,9 +684,10 @@ fun NewRequestScreen(navController: NavController) {
                     }
                 )
             }
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Tarjeta dirección detectada
+            // Tarjeta con la dirección detectada
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -727,9 +710,10 @@ fun NewRequestScreen(navController: NavController) {
                     )
                 }
             }
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Campo referencia
+            // Campo de referencia de dirección
             HomefixTextField(
                 value = reference,
                 onValueChange = { reference = it },
@@ -737,7 +721,7 @@ fun NewRequestScreen(navController: NavController) {
                 singleLine = false
             )
             Text(
-                "Ej: Frente al parque, casa de rejas azules",
+                text = "Ej: Frente al parque, casa de rejas azules",
                 style = MaterialTheme.typography.labelSmall,
                 color = TextSecondary,
                 modifier = Modifier.padding(start = 4.dp, top = 2.dp)
@@ -745,7 +729,7 @@ fun NewRequestScreen(navController: NavController) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Toggle urgente
+            // ── Toggle urgente ──
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),

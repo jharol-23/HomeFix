@@ -1,13 +1,5 @@
 package com.tunegocio.homefix.ui.technician
 
-
-
-
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tunegocio.homefix.viewmodel.NotificationsViewModel
-
-
-
 import android.Manifest
 import android.annotation.SuppressLint
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.android.gms.location.LocationServices
 import com.google.firebase.auth.FirebaseAuth
@@ -37,6 +30,7 @@ import com.tunegocio.homefix.data.LocationUtils
 import com.tunegocio.homefix.data.model.RequestModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.theme.*
+import com.tunegocio.homefix.viewmodel.NotificationsViewModel
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -49,16 +43,14 @@ fun HomeTechnicianScreen(navController: NavController) {
 
     var userName by remember { mutableStateOf("") }
     var userDistrict by remember { mutableStateOf("") }
-    var isActive by remember { mutableStateOf(true) }
+    var isActive by remember { mutableStateOf(false) } // false es el valor correcto por defecto
     var techLat by remember { mutableStateOf(0.0) }
     var techLng by remember { mutableStateOf(0.0) }
     var hasGps by remember { mutableStateOf(false) }
     var allRequests by remember { mutableStateOf(listOf<RequestModel>()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedDistrictFilter by remember { mutableStateOf("Todos") }
-
     var techSpecialties by remember { mutableStateOf(listOf<String>()) }
-
 
     // ViewModel para badge de notificaciones no leídas
     val notificationsViewModel: NotificationsViewModel = viewModel()
@@ -79,7 +71,7 @@ fun HomeTechnicianScreen(navController: NavController) {
                     db.collection("users").document(uid)
                         .update(mapOf("lat" to techLat, "lng" to techLng))
                 } else {
-                    // Usar coordenadas del distrito registrado
+                    // Usar coordenadas del distrito registrado como fallback
                     val coords = LocationUtils.districtCoordinates[userDistrict]
                     if (coords != null) {
                         techLat = coords.first
@@ -101,7 +93,7 @@ fun HomeTechnicianScreen(navController: NavController) {
                 techLng = doc.getDouble("lng") ?: 0.0
                 hasGps = techLat != 0.0 && techLng != 0.0
 
-                // Nuevo — cargar especialidades del técnico
+                // Cargar especialidades del técnico
                 @Suppress("UNCHECKED_CAST")
                 techSpecialties = (doc.get("specialties") as? List<String>) ?: emptyList()
 
@@ -115,7 +107,7 @@ fun HomeTechnicianScreen(navController: NavController) {
                     )
                 }
 
-                // Si no tiene GPS, usar coordenadas del distrito
+                // Si no tiene GPS, usar coordenadas del distrito como fallback
                 if (!hasGps) {
                     val coords = LocationUtils.districtCoordinates[userDistrict]
                     if (coords != null) {
@@ -139,9 +131,7 @@ fun HomeTechnicianScreen(navController: NavController) {
     fun toggleActive(newValue: Boolean) {
         isActive = newValue
         val updates = mutableMapOf<String, Any>("isActive" to newValue)
-
         if (newValue) {
-            // Al activarse, pedir ubicación
             locationPermissionLauncher.launch(
                 arrayOf(
                     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -161,11 +151,9 @@ fun HomeTechnicianScreen(navController: NavController) {
         )
     }
 
-
-
-    // Filtrar por especialidad del técnico primero --ESTO IMPORTA POR INDEPENDENCIA DE ESPECIALIDAD
+    // Filtrar por especialidad del técnico (independencia de especialidad)
     val specialtyFilteredRequests = if (techSpecialties.isEmpty()) {
-        allRequests  // Si no tiene especialidades registradas, ve todas
+        allRequests // Sin especialidades registradas: ve todas
     } else {
         allRequests.filter { request ->
             techSpecialties.any { specialty ->
@@ -174,7 +162,7 @@ fun HomeTechnicianScreen(navController: NavController) {
         }
     }
 
-    // Calcula distancia solo sobre las solicitudes filtradas por especialidad
+    // Calcular distancia sobre las solicitudes ya filtradas por especialidad
     val requestsWithDistance = specialtyFilteredRequests.map { request ->
         val distance = if (techLat != 0.0 && techLng != 0.0 &&
             request.lat != 0.0 && request.lng != 0.0
@@ -221,6 +209,7 @@ fun HomeTechnicianScreen(navController: NavController) {
                 .padding(padding),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Header
             item {
                 Column(modifier = Modifier.padding(horizontal = 20.dp)) {
                     Spacer(modifier = Modifier.height(20.dp))
@@ -257,7 +246,8 @@ fun HomeTechnicianScreen(navController: NavController) {
                                 }
                             }
                         }
-// Íconos de notificaciones y perfil en el header
+
+                        // Íconos de notificaciones y perfil
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             BadgedBox(
                                 badge = {
@@ -486,13 +476,9 @@ fun HomeTechnicianScreen(navController: NavController) {
                         items(nearbyRequests) { (request, distance) ->
                             NearbyRequestCard(
                                 request = request,
-                                distance = distance?.let {
-                                    LocationUtils.formatDistance(it)
-                                },
+                                distance = distance?.let { LocationUtils.formatDistance(it) },
                                 onClick = {
-                                    navController.navigate(
-                                        Routes.requestDetail(request.requestId)
-                                    )
+                                    navController.navigate(Routes.requestDetail(request.requestId))
                                 },
                                 modifier = Modifier.padding(horizontal = 20.dp)
                             )
@@ -528,13 +514,9 @@ fun HomeTechnicianScreen(navController: NavController) {
                         items(otherRequests) { (request, distance) ->
                             NearbyRequestCard(
                                 request = request,
-                                distance = distance?.let {
-                                    LocationUtils.formatDistance(it)
-                                },
+                                distance = distance?.let { LocationUtils.formatDistance(it) },
                                 onClick = {
-                                    navController.navigate(
-                                        Routes.requestDetail(request.requestId)
-                                    )
+                                    navController.navigate(Routes.requestDetail(request.requestId))
                                 },
                                 modifier = Modifier.padding(horizontal = 20.dp)
                             )
@@ -549,9 +531,7 @@ fun HomeTechnicianScreen(navController: NavController) {
                                     .fillMaxWidth()
                                     .padding(horizontal = 20.dp),
                                 shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = SurfaceVariant
-                                )
+                                colors = CardDefaults.cardColors(containerColor = SurfaceVariant)
                             ) {
                                 Column(
                                     modifier = Modifier
@@ -628,10 +608,7 @@ fun NearbyRequestCard(
                     ) {
                         Text(
                             text = "⚡ Urgente",
-                            modifier = Modifier.padding(
-                                horizontal = 8.dp,
-                                vertical = 4.dp
-                            ),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = Error,
                             fontWeight = FontWeight.Medium
@@ -674,10 +651,7 @@ fun NearbyRequestCard(
                     ) {
                         Text(
                             text = distance,
-                            modifier = Modifier.padding(
-                                horizontal = 8.dp,
-                                vertical = 3.dp
-                            ),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = Primary,
                             fontWeight = FontWeight.Medium

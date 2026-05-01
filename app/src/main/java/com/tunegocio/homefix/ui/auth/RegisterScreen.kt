@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -27,7 +28,9 @@ import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.tunegocio.homefix.data.ALL_SPECIALTIES
+import com.tunegocio.homefix.data.CloudinaryUploader
+import com.tunegocio.homefix.data.MAX_SPECIALTIES
 import com.tunegocio.homefix.data.model.UserModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.components.HomefixButton
@@ -38,29 +41,8 @@ import com.tunegocio.homefix.ui.components.validatePassword
 import com.tunegocio.homefix.ui.theme.*
 import java.io.File
 import java.util.UUID
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-
-import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import com.tunegocio.homefix.data.CloudinaryUploader
-import com.tunegocio.homefix.data.CloudinaryConfig
 
-import com.tunegocio.homefix.data.ALL_SPECIALTIES
-import com.tunegocio.homefix.data.MAX_SPECIALTIES
-
-
-
-
-
-
-/*val ALL_SPECIALTIES = listOf(
-    "Electricidad", "Gasfitería", "Pintura", "Carpintería",
-    "Vidriería", "Jardinería", "Cerrajería", "Albañilería",
-    "Muebles a medida", "Lavado de tapizados", "Mudanzas"
-)
-*/
 val LIMA_DISTRICTS = listOf(
     "Ancón", "Ate", "Barranco", "Breña", "Carabayllo",
     "Cercado de Lima", "Chaclacayo", "Chorrillos", "Cieneguilla",
@@ -76,18 +58,14 @@ val LIMA_DISTRICTS = listOf(
     "Villa El Salvador", "Villa María del Triunfo"
 )
 
-// const val MAX_SPECIALTIES = 3
-
 @OptIn(ExperimentalLayoutApi::class)
-
-
 @Composable
 fun RegisterScreen(navController: NavController) {
 
     val auth = FirebaseAuth.getInstance()
     val db = FirebaseFirestore.getInstance()
-    val storage = FirebaseStorage.getInstance()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     // Campos comunes
     var firstName by remember { mutableStateOf("") }
@@ -103,14 +81,18 @@ fun RegisterScreen(navController: NavController) {
     // Selfie — ambos roles
     var selfieUri by remember { mutableStateOf<android.net.Uri?>(null) }
 
-    val scope = rememberCoroutineScope()
-
     // Campos solo técnico
     var dni by remember { mutableStateOf("") }
     var yearsExp by remember { mutableStateOf("") }
     var selectedSpecialties by remember { mutableStateOf(listOf<String>()) }
     var showSpecialtyDialog by remember { mutableStateOf(false) }
 
+    // Términos y mayoría de edad
+    var aceptoTerminos by remember { mutableStateOf(false) }
+    var esMayorDeEdad by remember { mutableStateOf(false) }
+    var mostrarTerminos by remember { mutableStateOf(false) }
+
+    // Estado general
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
@@ -126,6 +108,8 @@ fun RegisterScreen(navController: NavController) {
     var roleError by remember { mutableStateOf("") }
     var dniError by remember { mutableStateOf("") }
     var specialtyError by remember { mutableStateOf("") }
+    var terminosError by remember { mutableStateOf("") }
+    var edadError by remember { mutableStateOf("") }
 
     // Archivo temporal para selfie
     val selfieFile = remember { File(context.cacheDir, "selfie_${UUID.randomUUID()}.jpg") }
@@ -133,7 +117,7 @@ fun RegisterScreen(navController: NavController) {
         FileProvider.getUriForFile(context, "${context.packageName}.provider", selfieFile)
     }
 
-    // Launcher cámara frontal
+    // Launcher cámara
     val selfieLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
@@ -179,12 +163,25 @@ fun RegisterScreen(navController: NavController) {
         )
     }
 
+    // Diálogo términos y condiciones
+    if (mostrarTerminos) {
+        DialogoTerminos(
+            onAceptar = {
+                aceptoTerminos = true
+                terminosError = ""
+                mostrarTerminos = false
+            },
+            onCerrar = { mostrarTerminos = false }
+        )
+    }
+
     fun register() {
         // Limpiar errores
         firstNameError = ""; lastNameError = ""; emailError = ""
         passwordError = ""; confirmPasswordError = ""; phoneError = ""
         districtError = ""; selfieError = ""; roleError = ""
         dniError = ""; specialtyError = ""; errorMessage = ""
+        terminosError = ""; edadError = ""
 
         var hasError = false
 
@@ -255,13 +252,11 @@ fun RegisterScreen(navController: NavController) {
             hasError = true
         }
 
-        // Selfie obligatoria para ambos
         if (selfieUri == null) {
             selfieError = "La foto de perfil es obligatoria"
             hasError = true
         }
 
-        // Validaciones solo técnico
         if (selectedRole == "technician") {
             if (dni.isBlank()) {
                 dniError = "El DNI es obligatorio"
@@ -276,19 +271,28 @@ fun RegisterScreen(navController: NavController) {
             }
         }
 
+        if (!aceptoTerminos) {
+            terminosError = "Debes aceptar los términos y condiciones"
+            hasError = true
+        }
+
+        if (!esMayorDeEdad) {
+            edadError = "Debes ser mayor de 18 años para registrarte"
+            hasError = true
+        }
+
         if (hasError) return
         isLoading = true
 
-        val fullName = "${firstName.trim()} ${lastName.trim()}"
-
         auth.createUserWithEmailAndPassword(email.trim(), password)
-            .addOnSuccessListener { result ->
-                val uid = result.user?.uid ?: return@addOnSuccessListener
+            .addOnSuccessListener { authResult ->
+                val uid = authResult.user?.uid ?: return@addOnSuccessListener
 
                 fun saveUser(selfieUrl: String) {
                     val user = UserModel(
                         uid = uid,
-                        name = fullName,
+                        name = firstName.trim(),
+                        lastName = lastName.trim(),
                         email = email.trim(),
                         role = selectedRole,
                         phone = phone.trim(),
@@ -302,15 +306,10 @@ fun RegisterScreen(navController: NavController) {
                     )
                     db.collection("users").document(uid).set(user)
                         .addOnSuccessListener {
+                            authResult.user?.sendEmailVerification()
                             isLoading = false
-                            if (selectedRole == "technician") {
-                                navController.navigate(Routes.HOME_TECHNICIAN) {
-                                    popUpTo(Routes.REGISTER) { inclusive = true }
-                                }
-                            } else {
-                                navController.navigate(Routes.HOME_CLIENT) {
-                                    popUpTo(Routes.REGISTER) { inclusive = true }
-                                }
+                            navController.navigate(Routes.VERIFICAR_EMAIL) {
+                                popUpTo(Routes.REGISTER) { inclusive = true }
                             }
                         }
                         .addOnFailureListener {
@@ -319,15 +318,14 @@ fun RegisterScreen(navController: NavController) {
                         }
                 }
 
-                // Subir selfie a Cloudinary
                 if (selfieUri != null) {
                     scope.launch {
-                        val result = CloudinaryUploader.uploadImage(
+                        val uploadResult = CloudinaryUploader.uploadImage(
                             context = context,
                             uri = selfieUri!!,
                             folder = "homefix/selfies"
                         )
-                        result.fold(
+                        uploadResult.fold(
                             onSuccess = { url -> saveUser(url) },
                             onFailure = {
                                 isLoading = false
@@ -417,7 +415,9 @@ fun RegisterScreen(navController: NavController) {
                     text = roleError,
                     color = Error,
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp)
                 )
             }
 
@@ -524,7 +524,9 @@ fun RegisterScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(6.dp))
             OutlinedButton(
                 onClick = { showDistrictDialog = true },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = if (districtError.isNotEmpty()) Error else Primary
@@ -541,12 +543,8 @@ fun RegisterScreen(navController: NavController) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (selectedDistrict.isEmpty())
-                        "Selecciona tu distrito"
-                    else
-                        selectedDistrict,
-                    fontWeight = if (selectedDistrict.isNotEmpty())
-                        FontWeight.Medium else FontWeight.Normal
+                    text = if (selectedDistrict.isEmpty()) "Selecciona tu distrito" else selectedDistrict,
+                    fontWeight = if (selectedDistrict.isNotEmpty()) FontWeight.Medium else FontWeight.Normal
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Icon(
@@ -560,13 +558,15 @@ fun RegisterScreen(navController: NavController) {
                     text = districtError,
                     color = Error,
                     style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, top = 4.dp)
                 )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Selfie — obligatoria para ambos roles
+            // Foto de perfil
             HorizontalDivider(color = CardBorder)
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -628,10 +628,10 @@ fun RegisterScreen(navController: NavController) {
                 )
             } else {
                 OutlinedButton(
-                    onClick = {
-                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = if (selfieError.isNotEmpty()) Error else Primary
@@ -654,7 +654,9 @@ fun RegisterScreen(navController: NavController) {
                         text = selfieError,
                         color = Error,
                         style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, top = 4.dp)
                     )
                 }
             }
@@ -715,7 +717,9 @@ fun RegisterScreen(navController: NavController) {
 
                 OutlinedButton(
                     onClick = { showSpecialtyDialog = true },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = if (specialtyError.isNotEmpty()) Error else Primary
@@ -744,20 +748,21 @@ fun RegisterScreen(navController: NavController) {
                         modifier = Modifier.size(18.dp)
                     )
                 }
-
                 if (specialtyError.isNotEmpty()) {
                     Text(
                         text = specialtyError,
                         color = Error,
                         style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, top = 4.dp)
                     )
                 }
 
                 // Chips de especialidades seleccionadas
                 if (selectedSpecialties.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    androidx.compose.foundation.layout.FlowRow(
+                    FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -768,10 +773,7 @@ fun RegisterScreen(navController: NavController) {
                                 color = TechnicianColor.copy(alpha = 0.1f)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(
-                                        horizontal = 10.dp,
-                                        vertical = 5.dp
-                                    ),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
@@ -787,8 +789,7 @@ fun RegisterScreen(navController: NavController) {
                                         modifier = Modifier
                                             .size(12.dp)
                                             .clickable {
-                                                selectedSpecialties =
-                                                    selectedSpecialties - specialty
+                                                selectedSpecialties = selectedSpecialties - specialty
                                             }
                                     )
                                 }
@@ -807,6 +808,90 @@ fun RegisterScreen(navController: NavController) {
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center
                 )
+            }
+
+            // Términos y mayoría de edad
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = CardBorder)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Checkbox — Términos y condiciones
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Checkbox(
+                    checked = aceptoTerminos,
+                    onCheckedChange = {
+                        aceptoTerminos = it
+                        if (it) terminosError = ""
+                    },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Primary,
+                        uncheckedColor = if (terminosError.isNotEmpty()) Error else TextSecondary
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    Row {
+                        Text(
+                            text = "He leído y acepto los ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Términos y Condiciones",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Primary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { mostrarTerminos = true }
+                        )
+                    }
+                    if (terminosError.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = terminosError,
+                            color = Error,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Checkbox — Mayor de edad
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Checkbox(
+                    checked = esMayorDeEdad,
+                    onCheckedChange = {
+                        esMayorDeEdad = it
+                        if (it) edadError = ""
+                    },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Primary,
+                        uncheckedColor = if (edadError.isNotEmpty()) Error else TextSecondary
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.padding(top = 12.dp)) {
+                    Text(
+                        text = "Confirmo que soy mayor de 18 años",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextPrimary
+                    )
+                    if (edadError.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = edadError,
+                            color = Error,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -840,7 +925,6 @@ fun RegisterScreen(navController: NavController) {
     }
 }
 
-// Diálogo selector de distrito
 @Composable
 fun DistrictPickerDialog(
     districts: List<String>,
@@ -849,9 +933,7 @@ fun DistrictPickerDialog(
     onConfirm: (String) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val filtered = districts.filter {
-        it.contains(searchQuery, ignoreCase = true)
-    }
+    val filtered = districts.filter { it.contains(searchQuery, ignoreCase = true) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -900,8 +982,7 @@ fun DistrictPickerDialog(
                                 .fillMaxWidth()
                                 .clickable { onConfirm(district) }
                                 .background(
-                                    if (isSelected) Primary.copy(alpha = 0.08f)
-                                    else Color.Transparent,
+                                    if (isSelected) Primary.copy(alpha = 0.08f) else Color.Transparent,
                                     RoundedCornerShape(8.dp)
                                 )
                                 .padding(horizontal = 8.dp, vertical = 10.dp),
@@ -912,8 +993,7 @@ fun DistrictPickerDialog(
                                 text = district,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = if (isSelected) Primary else TextPrimary,
-                                fontWeight = if (isSelected) FontWeight.SemiBold
-                                else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                             )
                             if (isSelected) {
                                 Icon(
@@ -936,7 +1016,6 @@ fun DistrictPickerDialog(
     )
 }
 
-// Diálogo selector de especialidades
 @Composable
 fun SpecialtyPickerDialog(
     allSpecialties: List<String>,
@@ -984,9 +1063,7 @@ fun SpecialtyPickerDialog(
                             checked = isSelected,
                             onCheckedChange = null,
                             enabled = !isDisabled,
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = TechnicianColor
-                            )
+                            colors = CheckboxDefaults.colors(checkedColor = TechnicianColor)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(

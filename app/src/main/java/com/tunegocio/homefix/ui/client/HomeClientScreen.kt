@@ -1,15 +1,6 @@
 package com.tunegocio.homefix.ui.client
 
-
-
-
-
-
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.tunegocio.homefix.viewmodel.NotificationsViewModel
-
-
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,9 +20,9 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.tunegocio.homefix.data.model.RequestModel
-import com.tunegocio.homefix.data.model.UserModel
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.theme.*
+import com.tunegocio.homefix.viewmodel.NotificationsViewModel
 
 @Composable
 fun HomeClientScreen(navController: NavController) {
@@ -98,7 +89,7 @@ fun HomeClientScreen(navController: NavController) {
                             color = TextSecondary
                         )
                     }
-// Íconos de notificaciones y perfil en el header
+                    // Íconos de notificaciones y perfil en el header
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Ícono notificaciones con badge de no leídas
                         BadgedBox(
@@ -141,11 +132,7 @@ fun HomeClientScreen(navController: NavController) {
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Primary)
                 ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
+                    Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Nueva solicitud",
@@ -190,16 +177,16 @@ fun HomeClientScreen(navController: NavController) {
             if (isLoading) {
                 item {
                     Box(
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(color = Primary)
                     }
                 }
             } else if (requests.isEmpty()) {
-                item {
-                    EmptyRequestsCard()
-                }
+                item { EmptyRequestsCard() }
             } else {
                 items(requests.filter {
                     it.status != "completada" && it.status != "cancelada"

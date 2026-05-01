@@ -22,7 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.tunegocio.homefix.data.NotificationsRepository
 import com.tunegocio.homefix.data.model.RequestModel
 import com.tunegocio.homefix.data.model.UserModel
 import com.tunegocio.homefix.navigation.Routes
@@ -46,8 +48,7 @@ fun RequestDetailScreen(
     var errorMessage by remember { mutableStateOf("") }
 
     // Repositorio para crear notificaciones
-    val notificationsRepo = remember { com.tunegocio.homefix.data.NotificationsRepository() }
-
+    val notificationsRepo = remember { NotificationsRepository() }
 
     LaunchedEffect(requestId) {
         // Cargar solicitud
@@ -63,20 +64,25 @@ fun RequestDetailScreen(
                         }
                 }
             }
+            .addOnFailureListener {
+                isLoading = false
+                errorMessage = "Error al cargar la solicitud"
+            }
     }
 
     fun acceptRequest() {
         actionLoading = true
-        // Agrega el técnico a la lista de interesados sin cambiar el status
+        // Agrega el técnico a la lista de interesados sin cambiar el status:
+        // es el cliente quien elige al técnico, no el técnico quien se asigna.
         db.collection("requests").document(requestId)
             .update(
                 mapOf(
-                    "interestedTechnicians" to com.google.firebase.firestore.FieldValue.arrayUnion(technicianId),
+                    "interestedTechnicians" to FieldValue.arrayUnion(technicianId),
                     "updatedAt" to System.currentTimeMillis()
                 )
             )
             .addOnSuccessListener {
-                // Notifica al cliente que hay un técnico interesado
+                // Notificar al cliente que hay un técnico interesado
                 request?.clientId?.let { clientId ->
                     notificationsRepo.crearNotificacion(
                         userId = clientId,
@@ -87,7 +93,7 @@ fun RequestDetailScreen(
                     )
                 }
                 actionLoading = false
-                // Se queda en pantalla mostrando confirmación
+                // Actualizar estado local para reflejar el interés registrado
                 request = request?.copy(
                     interestedTechnicians = (request?.interestedTechnicians ?: emptyList()) + technicianId
                 )
@@ -125,6 +131,10 @@ fun RequestDetailScreen(
                     )
                 }
             }
+            .addOnFailureListener {
+                actionLoading = false
+                errorMessage = "Error al actualizar el estado"
+            }
     }
 
     fun markCompleted() {
@@ -152,6 +162,10 @@ fun RequestDetailScreen(
                     popUpTo(Routes.HOME_TECHNICIAN) { inclusive = true }
                 }
             }
+            .addOnFailureListener {
+                actionLoading = false
+                errorMessage = "Error al completar el servicio"
+            }
     }
 
     fun openWhatsApp(phone: String) {
@@ -169,7 +183,9 @@ fun RequestDetailScreen(
 
     if (isLoading) {
         Box(
-            modifier = Modifier.fillMaxSize().background(Background),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Background),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(color = Primary)
@@ -426,10 +442,12 @@ fun RequestDetailScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(
                         onClick = { rejectRequest() },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = Error)
-                    ){
+                    ) {
                         Text("✕ No me interesa", style = MaterialTheme.typography.labelLarge)
                     }
                 }
@@ -458,7 +476,9 @@ fun RequestDetailScreen(
                         )
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center
                         ) {

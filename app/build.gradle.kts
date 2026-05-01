@@ -48,34 +48,44 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
-    // Firebase — nuevos
+    // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.messaging)
 
-    // Navegación — nuevos
+    // Navegación
     implementation(libs.navigation.compose)
     implementation(libs.viewmodel.compose)
 
-    // GPS y Maps — nuevos
+    // GPS y Maps
     implementation(libs.maps.services)
     implementation(libs.location.services)
 
-    // Cámara — nuevos
+    // Cámara
     implementation(libs.camera.camera2)
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
 
-    // Imágenes — nuevo
+    // Imágenes
     implementation(libs.coil.compose)
 
-    // Corrutinas — nuevo
+    // Corrutinas
     implementation(libs.coroutines.android)
     implementation(libs.androidx.compose.foundation)
 
-    // Testing — ya venían
+    // Extras
+    implementation(libs.compose.icons.extended)
+    implementation(libs.okhttp)
+
+    // DataStore — de tu compañero
+    implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // OSMDroid — tuyo
+    implementation(libs.osmdroid)
+
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -83,12 +93,4 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-
-
-    implementation(libs.compose.icons.extended)
-
-    implementation(libs.okhttp)
-
-
-    implementation(libs.osmdroid)
 }

@@ -5,6 +5,8 @@ object Routes {
     const val SPLASH = "splash"
     const val LOGIN = "login"
     const val REGISTER = "register"
+    const val VERIFICAR_EMAIL = "verificar_email"
+    const val OLVIDE_CONTRASENA = "olvide_contrasena"
 
     // Cliente
     const val HOME_CLIENT = "home_client"
@@ -17,16 +19,14 @@ object Routes {
     const val REQUEST_DETAIL = "request_detail/{requestId}"
     const val EARNINGS = "earnings"
 
-    // Compartidas
+    // Compartidas (ambos roles)
     const val PROFILE = "profile"
     const val HISTORY = "history"
     const val RATING = "rating/{requestId}"
-
-    // Rutas compartidas — notificaciones y ajustes
-    const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
+    const val NOTIFICATIONS = "notifications"
 
-    // Funciones helper para rutas con parámetros
+    // Helpers para rutas con parámetros
     fun requestTracking(requestId: String) = "request_tracking/$requestId"
     fun requestDetail(requestId: String) = "request_detail/$requestId"
     fun rating(requestId: String) = "rating/$requestId"

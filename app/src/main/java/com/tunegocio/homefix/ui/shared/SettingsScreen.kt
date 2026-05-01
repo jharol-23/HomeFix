@@ -1,7 +1,6 @@
 package com.tunegocio.homefix.ui.shared
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,107 +11,186 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
+import com.tunegocio.homefix.data.UserPreferences
 import com.tunegocio.homefix.navigation.Routes
 import com.tunegocio.homefix.ui.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(navController: NavController) {
 
     val auth = FirebaseAuth.getInstance()
+    val context = LocalContext.current
+    val prefs = remember { UserPreferences(context) }
+    val scope = rememberCoroutineScope()
 
-    // Estado del modo oscuro (por ahora solo visual, se puede expandir)
-    var modoOscuro by remember { mutableStateOf(false) }
-    var vibracion by remember { mutableStateOf(true) }
-    var sonido by remember { mutableStateOf(true) }
+    val darkMode by prefs.darkMode.collectAsState(initial = false)
+    val language by prefs.language.collectAsState(initial = "es")
+    val notifSound by prefs.notifSound.collectAsState(initial = true)
+    val notifVibration by prefs.notifVibration.collectAsState(initial = true)
 
-    Column(
+    var showLanguageDialog by remember { mutableStateOf(false) }
+
+    val languageLabel = when (language) {
+        "en" -> "English"
+        "pt" -> "Português"
+        else -> "Español (Perú)"
+    }
+
+    // ── Diálogo de idioma ────────────────────────────────────────────────────
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("Seleccionar idioma", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    listOf(
+                        "es" to "🇵🇪  Español",
+                        "en" to "🇺🇸  English",
+                        "pt" to "🇧🇷  Português"
+                    ).forEach { (code, label) ->
+                        val isSelected = language == code
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isSelected) Primary else TextPrimary,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = {
+                                    scope.launch { prefs.setLanguage(code) }
+                                    showLanguageDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(selectedColor = Primary)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) {
+                    Text("Cerrar", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Background)
-            .verticalScroll(rememberScrollState())
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(20.dp)
         ) {
-            IconButton(onClick = { navController.popBackStack() }) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = TextPrimary)
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ── Header ───────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = TextPrimary)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Configuraciones",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Ajustes",
-                style = MaterialTheme.typography.headlineMedium,
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // ── Apariencia ───────────────────────────────────────────────────
+            SettingsSectionTitle(title = "Apariencia")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SettingsToggleItem(
+                icon = if (darkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                iconColor = if (darkMode) Color(0xFF90CAF9) else Warning,
+                title = if (darkMode) "Modo oscuro" else "Modo claro",
+                subtitle = if (darkMode) "Activado" else "Desactivado",
+                checked = darkMode,
+                onCheckedChange = { scope.launch { prefs.setDarkMode(it) } }
             )
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Sección apariencia
-        SettingsSectionTitle(titulo = "Apariencia")
+            // ── Idioma ───────────────────────────────────────────────────────
+            SettingsClickItem(
+                icon = Icons.Default.Language,
+                iconColor = Info,
+                title = "Idioma",
+                subtitle = languageLabel,
+                onClick = { showLanguageDialog = true }
+            )
 
-        SettingsToggleItem(
-            icono = Icons.Default.DarkMode,
-            titulo = "Modo oscuro",
-            descripcion = "Cambia el tema de la app",
-            valor = modoOscuro,
-            onCambio = { modoOscuro = it }
-        )
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // Sección notificaciones
-        SettingsSectionTitle(titulo = "Notificaciones")
+            // ── Notificaciones ───────────────────────────────────────────────
+            SettingsSectionTitle(title = "Notificaciones")
+            Spacer(modifier = Modifier.height(8.dp))
 
-        SettingsToggleItem(
-            icono = Icons.Default.Vibration,
-            titulo = "Vibración",
-            descripcion = "Vibra al recibir alertas importantes",
-            valor = vibracion,
-            onCambio = { vibracion = it }
-        )
+            SettingsToggleItem(
+                icon = Icons.Default.VolumeUp,
+                iconColor = Secondary,
+                title = "Sonido",
+                subtitle = if (notifSound) "Las notificaciones emiten sonido" else "Sin sonido",
+                checked = notifSound,
+                onCheckedChange = { scope.launch { prefs.setNotifSound(it) } }
+            )
 
-        SettingsToggleItem(
-            icono = Icons.Default.VolumeUp,
-            titulo = "Sonido",
-            descripcion = "Sonido al recibir notificaciones",
-            valor = sonido,
-            onCambio = { sonido = it }
-        )
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Sección idioma
-        SettingsSectionTitle(titulo = "Idioma")
+            SettingsToggleItem(
+                icon = Icons.Default.Vibration,
+                iconColor = TechnicianColor,
+                title = "Vibración",
+                subtitle = if (notifVibration) "El dispositivo vibra" else "Sin vibración",
+                checked = notifVibration,
+                onCheckedChange = { scope.launch { prefs.setNotifVibration(it) } }
+            )
 
-        SettingsClickItem(
-            icono = Icons.Default.Language,
-            titulo = "Idioma de la app",
-            descripcion = "Español (Perú)",
-            onClick = { /* Por implementar */ }
-        )
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // Sección cuenta
-        SettingsSectionTitle(titulo = "Cuenta")
+            // ── Cuenta ───────────────────────────────────────────────────────
+            SettingsSectionTitle(title = "Cuenta")
+            Spacer(modifier = Modifier.height(8.dp))
 
-        SettingsClickItem(
-            icono = Icons.Default.Lock,
-            titulo = "Privacidad",
-            descripcion = "Términos y condiciones",
-            onClick = { /* Por implementar */ }
-        )
+            SettingsClickItem(
+                icon = Icons.Default.Lock,
+                iconColor = Primary,
+                title = "Privacidad",
+                subtitle = "Términos y condiciones",
+                onClick = { /* Por implementar */ }
+            )
 
-        // Botón cerrar sesión
-        Spacer(modifier = Modifier.height(16.dp))
-        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // ── Cerrar sesión ────────────────────────────────────────────────
             Button(
                 onClick = {
-                    // Cierra sesión y regresa al login
                     auth.signOut()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
@@ -132,115 +210,108 @@ fun SettingsScreen(navController: NavController) {
                     fontWeight = FontWeight.SemiBold
                 )
             }
-        }
 
-        Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(32.dp))
+        }
     }
 }
 
-// Título de sección
+// ── Componentes privados ─────────────────────────────────────────────────────
+
 @Composable
-fun SettingsSectionTitle(titulo: String) {
+private fun SettingsSectionTitle(title: String) {
     Text(
-        text = titulo,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        text = title.uppercase(),
         style = MaterialTheme.typography.labelMedium,
-        color = Primary,
-        fontWeight = FontWeight.SemiBold
+        color = TextSecondary,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
     )
 }
 
-// Item con toggle
 @Composable
-fun SettingsToggleItem(
-    icono: ImageVector,
-    titulo: String,
-    descripcion: String,
-    valor: Boolean,
-    onCambio: (Boolean) -> Unit
+private fun SettingsToggleItem(
+    icon: ImageVector,
+    iconColor: Color,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icono, contentDescription = null, tint = Primary, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.width(12.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = iconColor.copy(alpha = 0.12f),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+                }
+            }
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = titulo,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = descripcion,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
+                Text(text = title, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(text = subtitle, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             }
             Switch(
-                checked = valor,
-                onCheckedChange = onCambio,
-                colors = SwitchDefaults.colors(checkedTrackColor = Primary)
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Primary,
+                    checkedTrackColor = Primary.copy(alpha = 0.4f)
+                )
             )
         }
     }
 }
 
-// Item clickeable
 @Composable
-fun SettingsClickItem(
-    icono: ImageVector,
-    titulo: String,
-    descripcion: String,
+private fun SettingsClickItem(
+    icon: ImageVector,
+    iconColor: Color,
+    title: String,
+    subtitle: String,
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(icono, contentDescription = null, tint = Primary, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = titulo,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = descripcion,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = iconColor.copy(alpha = 0.12f),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+                }
             }
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(20.dp)
-            )
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(text = subtitle, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextHint, modifier = Modifier.size(20.dp))
         }
     }
 }
